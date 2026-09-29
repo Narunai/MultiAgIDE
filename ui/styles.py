@@ -1,206 +1,169 @@
 """
-Modern Dark Glassmorphic Theme for MultiAgIDE Studio
+Ultra-Minimal Modern Dark-Gray Theme for MultiAgIDE Studio
+Design: Pure text-based typography, zero emoji icons, flat, borderless, matte dark-gray.
 """
 
 DARK_THEME_QSS = """
-/* Global Defaults - Ensures NO white backgrounds anywhere */
+/* Global Minimal Dark-Gray */
 QWidget {
-    background-color: #0b0f17;
-    color: #f1f5f9;
+    background-color: #121214;
+    color: #d4d4d8;
     font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 13px;
+    font-size: 11px;
+    border: none;
+    outline: none;
 }
 
 QMainWindow {
-    background-color: #0b0f17;
+    background-color: #121214;
 }
 
-/* Scroll Area & Viewport */
-QScrollArea {
-    border: none;
-    background-color: #0b0f17;
-}
-
-QScrollArea > QWidget > QWidget {
-    background-color: #0b0f17;
-}
-
-QScrollBar:vertical {
-    background: #0b0f17;
-    width: 8px;
-    margin: 0px;
-    border-radius: 4px;
-}
-
-QScrollBar::handle:vertical {
-    background: #1e293b;
-    min-height: 20px;
-    border-radius: 4px;
-}
-
-QScrollBar::handle:vertical:hover {
-    background: #334155;
-}
-
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0px;
-}
-
-/* Header & Banner */
+/* Header Container */
 QFrame#HeaderCard {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #111827, stop:1 #1e1b4b);
-    border: 1px solid #312e81;
-    border-radius: 12px;
-    padding: 10px;
+    background-color: #18181b;
+    border-radius: 6px;
+    padding: 6px 8px;
 }
 
 QLabel#AppTitle {
     color: #38bdf8;
-    font-size: 16px;
-    font-weight: 800;
+    font-size: 13px;
+    font-weight: 700;
     letter-spacing: 0.5px;
     background: transparent;
 }
 
-QLabel#AppSubtitle {
-    color: #94a3b8;
-    font-size: 11px;
-    font-weight: 400;
-    background: transparent;
+/* Slot Cards - Flat, Clean, Borderless */
+QFrame#SlotCard {
+    background-color: #18181b;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
 }
 
-/* Slot Cards - Multiple selectors for 100% PySide6 compatibility */
-QFrame#SlotCard, QFrame.SlotCard, QFrame[class="SlotCard"] {
-    background-color: #131b29;
-    border: 1px solid #1e293b;
-    border-radius: 12px;
-    padding: 8px;
+QFrame#SlotCard:hover {
+    background-color: #202024;
 }
 
-QFrame#SlotCard:hover, QFrame.SlotCard:hover {
-    border: 1px solid #38bdf8;
-    background-color: #162032;
-}
-
-/* Quota Pill */
+/* Quota Pill - Flat Dark Strip */
 QFrame#QuotaPill {
-    background-color: #0a0e14;
-    border: 1px solid #1e293b;
-    border-radius: 10px;
-    padding: 6px;
+    background-color: #0f0f11;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
 }
 
 QLabel {
     background: transparent;
+    padding: 0px;
+    margin: 0px;
 }
 
-/* Status Badges */
-QLabel[class="BadgeRunning"], QLabel.BadgeRunning {
-    background-color: #064e3b;
-    color: #34d399;
-    border: 1px solid #059669;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 11px;
+/* Status Labels */
+QLabel#BadgeRunning {
+    color: #4ade80;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    background: transparent;
+}
+
+QLabel#BadgeStopped {
+    color: #52525b;
+    font-size: 9px;
     font-weight: 600;
+    letter-spacing: 0.5px;
+    background: transparent;
 }
 
-QLabel[class="BadgeStopped"], QLabel.BadgeStopped {
-    background-color: #1e293b;
-    color: #94a3b8;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-weight: 500;
-}
-
-/* Buttons */
+/* Text Buttons - Minimal Flat Style */
 QPushButton {
-    background-color: #1e293b;
-    color: #e2e8f0;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    padding: 6px 10px;
+    background-color: #27272a;
+    color: #d4d4d8;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
     font-weight: 600;
-    font-size: 12px;
 }
 
 QPushButton:hover {
-    background-color: #273549;
-    border-color: #475569;
+    background-color: #3f3f46;
     color: #ffffff;
 }
 
 QPushButton:pressed {
-    background-color: #0f172a;
+    background-color: #18181b;
 }
 
 /* Primary Action Buttons */
-QPushButton[class="PrimaryBtn"], QPushButton.PrimaryBtn {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563eb, stop:1 #4f46e5);
-    border: 1px solid #3b82f6;
+QPushButton.PrimaryBtn, QPushButton[class="PrimaryBtn"] {
+    background-color: #2563eb;
     color: #ffffff;
-    font-weight: bold;
 }
 
-QPushButton[class="PrimaryBtn"]:hover, QPushButton.PrimaryBtn:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1d4ed8, stop:1 #4338ca);
-    border-color: #60a5fa;
+QPushButton.PrimaryBtn:hover, QPushButton[class="PrimaryBtn"]:hover {
+    background-color: #1d4ed8;
 }
 
 /* Success Launch Button */
-QPushButton[class="SuccessBtn"], QPushButton.SuccessBtn {
-    background-color: #059669;
-    border: 1px solid #10b981;
-    color: #ffffff;
-    font-weight: bold;
+QPushButton.SuccessBtn, QPushButton[class="SuccessBtn"] {
+    background-color: #14532d;
+    color: #4ade80;
 }
 
-QPushButton[class="SuccessBtn"]:hover, QPushButton.SuccessBtn:hover {
-    background-color: #047857;
-}
-
-/* Stop Button */
-QPushButton[class="DangerBtn"], QPushButton.DangerBtn {
-    background-color: #991b1b;
-    border: 1px solid #dc2626;
+QPushButton.SuccessBtn:hover, QPushButton[class="SuccessBtn"]:hover {
+    background-color: #166534;
     color: #ffffff;
 }
 
-QPushButton[class="DangerBtn"]:hover, QPushButton.DangerBtn:hover {
+/* Stop Danger Button */
+QPushButton.DangerBtn, QPushButton[class="DangerBtn"] {
     background-color: #7f1d1d;
+    color: #f87171;
 }
 
-/* Preset Buttons */
-QPushButton[class="PresetBtn"], QPushButton.PresetBtn {
-    background-color: #111827;
-    border: 1px solid #374151;
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #93c5fd;
-}
-
-QPushButton[class="PresetBtn"]:hover, QPushButton.PresetBtn:hover {
-    background-color: #1e3a8a;
-    border-color: #60a5fa;
+QPushButton.DangerBtn:hover, QPushButton[class="DangerBtn"]:hover {
+    background-color: #991b1b;
     color: #ffffff;
 }
 
-/* Text Inputs */
+/* Header Grid Preset Buttons */
+QPushButton.PresetBtn, QPushButton[class="PresetBtn"] {
+    background-color: #202024;
+    color: #a1a1aa;
+    border-radius: 3px;
+    padding: 2px 5px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+QPushButton.PresetBtn:hover, QPushButton[class="PresetBtn"]:hover {
+    background-color: #38bdf8;
+    color: #09090b;
+}
+
+/* Minimal Text Inputs */
 QLineEdit {
-    background-color: #0f172a;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    padding: 4px 8px;
-    color: #f8fafc;
-    font-size: 12px;
+    background-color: transparent;
+    border: none;
+    color: #f4f4f5;
+    font-size: 11px;
+    padding: 0px 2px;
 }
 
 QLineEdit:focus {
-    border: 1px solid #38bdf8;
-    background-color: #131c2e;
+    background-color: #27272a;
+    border-radius: 3px;
+}
+
+/* Scroll Area - Zero Scrollbar */
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+QScrollBar:vertical, QScrollBar:horizontal {
+    width: 0px;
+    height: 0px;
 }
 """

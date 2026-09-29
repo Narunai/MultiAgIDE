@@ -16,14 +16,15 @@ from .slot_card import SlotCard
 
 class DashboardWindow(QMainWindow):
     """
-    Compact 1/4 Screen Mission Control Deck
-    เปิดขึ้นมาอยู่ตรงกลางหรือชิดซ้าย ไม่หลุดขอบจอ
-    พร้อมปุ่มย้าย ซ้าย / กลาง / ขวา ในคลิกเดียว
+    Pure Minimalist Control Deck (Zero Icons, Zero Scroll)
+    - แสดงผลครบทั้ง 6 สล็อตในหน้าจอเดียวโดยไม่ต้องเลื่อน Scroll
+    - ไม่มีไอคอนหรืออิโมจิใดๆ ใช้ Typography และปุ่มข้อความเรียบง่าย
+    - พื้นหลังสีดำเทา Flat Matte (#121214 / #18181b) ไร้กรอบ Border
     """
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("MultiAgIDE — Control Deck")
+        self.setWindowTitle("MultiAgIDE Control Deck")
 
         # Core Engines
         self.config_mgr = ConfigManager()
@@ -34,7 +35,7 @@ class DashboardWindow(QMainWindow):
         # Apply Stylesheet
         self.setStyleSheet(DARK_THEME_QSS)
 
-        # Set Safe Dimensions & Center on Screen
+        # Window Dimension & Position
         self.init_geometry()
 
         self.slot_cards = []
@@ -46,117 +47,121 @@ class DashboardWindow(QMainWindow):
         self.refresh_timer.start(2500)
 
     def init_geometry(self):
-        """ตั้งค่าพิกัดให้แสดงผลตรงกลางจอหรือชิดซ้าย ไม่หลุดขอบจอ"""
+        """ขนาดกะทัดรัด (กว้าง 360px, สูง 490px) มองเห็นครบ 6 สล็อตในจอเดียว 100%"""
         screen = QApplication.primaryScreen()
+        deck_w = 360
+        deck_h = 490
         if screen:
             geom = screen.availableGeometry()
-            deck_w = 400
-            deck_h = min(760, geom.height() - 60)
-            # เริ่มต้นที่ฝั่งซ้ายของหน้าจอ (มีระยะห่าง 30px สบายตา ลากง่าย)
             deck_x = geom.x() + 30
             deck_y = geom.y() + 30
             self.setGeometry(deck_x, deck_y, deck_w, deck_h)
-            self.setMinimumWidth(360)
-            self.setMaximumWidth(460)
         else:
-            self.resize(400, 740)
+            self.resize(deck_w, deck_h)
+
+        self.setFixedWidth(360)
+        self.setFixedHeight(490)
 
     def init_ui(self):
         central_widget = QWidget()
         central_widget.setObjectName("CentralWidget")
-        central_widget.setStyleSheet("background-color: #0b0f17;")
         self.setCentralWidget(central_widget)
 
         root_layout = QVBoxLayout(central_widget)
-        root_layout.setContentsMargins(10, 10, 10, 10)
-        root_layout.setSpacing(8)
+        root_layout.setContentsMargins(6, 6, 6, 6)
+        root_layout.setSpacing(4)
 
-        # 1. Compact Header
+        # 1. Minimal Header Card
         header_card = QFrame()
         header_card.setObjectName("HeaderCard")
         h_layout = QVBoxLayout(header_card)
-        h_layout.setContentsMargins(10, 8, 10, 8)
-        h_layout.setSpacing(6)
+        h_layout.setContentsMargins(6, 4, 6, 4)
+        h_layout.setSpacing(3)
 
+        # Header Line 1: Title & Position Buttons
         top_row = QHBoxLayout()
-        app_title = QLabel("⚡ MultiAgIDE Deck")
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(3)
+
+        app_title = QLabel("MultiAgIDE")
         app_title.setObjectName("AppTitle")
-        app_title.setStyleSheet("font-size: 15px; font-weight: 800; color: #38bdf8;")
         top_row.addWidget(app_title)
 
         top_row.addStretch()
 
-        # Position Quick Buttons (Left, Center, Right)
-        btn_left = QPushButton("⬅ ซ้าย")
-        btn_left.setToolTip("ย้าย Control Deck ไปชิดซ้าย")
+        pos_label = QLabel("Pos:")
+        pos_label.setStyleSheet("color: #71717a; font-size: 10px;")
+        top_row.addWidget(pos_label)
+
+        btn_left = QPushButton("Left")
+        btn_left.setToolTip("Dock to Left")
+        btn_left.setFixedHeight(18)
         btn_left.clicked.connect(self.dock_left)
         top_row.addWidget(btn_left)
 
-        btn_center = QPushButton("⏺ กลาง")
-        btn_center.setToolTip("ย้าย Control Deck มาไว้ตรงกลางจอ")
+        btn_center = QPushButton("Mid")
+        btn_center.setToolTip("Center on Screen")
+        btn_center.setFixedHeight(18)
         btn_center.clicked.connect(self.dock_center)
         top_row.addWidget(btn_center)
 
-        btn_right = QPushButton("➡ ขวา")
-        btn_right.setToolTip("ย้าย Control Deck ไปชิดขวา")
+        btn_right = QPushButton("Right")
+        btn_right.setToolTip("Dock to Right")
+        btn_right.setFixedHeight(18)
         btn_right.clicked.connect(self.dock_right)
         top_row.addWidget(btn_right)
 
         h_layout.addLayout(top_row)
 
-        # IDE Grid Presets Row
-        preset_row = QHBoxLayout()
-        preset_row.setSpacing(4)
-        preset_lbl = QLabel("Grid:")
-        preset_lbl.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: bold;")
-        preset_row.addWidget(preset_lbl)
+        # Header Line 2: Grid Presets & Action Buttons
+        ctrl_row = QHBoxLayout()
+        ctrl_row.setContentsMargins(0, 0, 0, 0)
+        ctrl_row.setSpacing(3)
+
+        grid_lbl = QLabel("Grid:")
+        grid_lbl.setStyleSheet("color: #71717a; font-size: 10px; font-weight: 600;")
+        ctrl_row.addWidget(grid_lbl)
 
         for count in [1, 2, 3, 4, 6]:
             btn = QPushButton(str(count))
             btn.setProperty("class", "PresetBtn")
-            btn.setFixedWidth(28)
-            btn.setToolTip(f"จัดแบ่งหน้าจอ IDE {count} ส่วน")
+            btn.setFixedSize(20, 18)
             btn.clicked.connect(lambda checked, c=count: self.apply_preset_count(c))
-            preset_row.addWidget(btn)
+            ctrl_row.addWidget(btn)
 
-        preset_row.addStretch()
+        ctrl_row.addStretch()
 
-        # Master Actions
-        self.btn_snap = QPushButton("🔄")
-        self.btn_snap.setToolTip("จัดระเบียบ Snap หน้าต่างทั้งหมด")
-        self.btn_snap.setFixedWidth(30)
+        self.btn_snap = QPushButton("Snap")
+        self.btn_snap.setFixedHeight(18)
         self.btn_snap.clicked.connect(self.on_snap_clicked)
-        preset_row.addWidget(self.btn_snap)
+        ctrl_row.addWidget(self.btn_snap)
 
-        self.btn_launch_all = QPushButton("🚀")
+        self.btn_launch_all = QPushButton("Run All")
         self.btn_launch_all.setProperty("class", "PrimaryBtn")
-        self.btn_launch_all.setToolTip("เปิดใช้งานทั้ง 6 สล็อต")
-        self.btn_launch_all.setFixedWidth(30)
+        self.btn_launch_all.setFixedHeight(18)
         self.btn_launch_all.clicked.connect(self.on_launch_all_clicked)
-        preset_row.addWidget(self.btn_launch_all)
+        ctrl_row.addWidget(self.btn_launch_all)
 
-        self.btn_stop_all = QPushButton("⏹")
+        self.btn_stop_all = QPushButton("Stop")
         self.btn_stop_all.setProperty("class", "DangerBtn")
-        self.btn_stop_all.setToolTip("ปิดสล็อตทั้งหมด")
-        self.btn_stop_all.setFixedWidth(30)
+        self.btn_stop_all.setFixedHeight(18)
         self.btn_stop_all.clicked.connect(self.on_stop_all_clicked)
-        preset_row.addWidget(self.btn_stop_all)
+        ctrl_row.addWidget(self.btn_stop_all)
 
-        h_layout.addLayout(preset_row)
+        h_layout.addLayout(ctrl_row)
         root_layout.addWidget(header_card)
 
-        # 2. Scroll Area containing all 6 Slots
+        # 2. Slots Container (Zero-Scroll: fits all 6 slots in single view)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("background-color: #0b0f17; border: none;")
-        scroll.viewport().setStyleSheet("background-color: #0b0f17;")
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         cards_container = QWidget()
         cards_container.setObjectName("CardsContainer")
-        cards_container.setStyleSheet("background-color: #0b0f17;")
         cards_layout = QVBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 0, 0, 0)
-        cards_layout.setSpacing(8)
+        cards_layout.setSpacing(3)
 
         slots_data = self.config_mgr.config.get("slots", [])
         for s_data in slots_data[:6]:
@@ -168,16 +173,19 @@ class DashboardWindow(QMainWindow):
         scroll.setWidget(cards_container)
         root_layout.addWidget(scroll, 1)
 
-        # 3. Compact Footer Status Bar
+        # 3. Minimal Footer
         footer = QHBoxLayout()
-        self.status_summary = QLabel("🟢 ตรวจสอบสถานะอัตโนมัติ")
-        self.status_summary.setStyleSheet("color: #64748b; font-size: 10px;")
+        footer.setContentsMargins(4, 0, 4, 0)
+
+        self.status_summary = QLabel("Active: 0/6 Slots")
+        self.status_summary.setStyleSheet("color: #71717a; font-size: 10px;")
         footer.addWidget(self.status_summary)
 
         footer.addStretch()
 
-        btn_profiles = QPushButton("📂 Profiles")
-        btn_profiles.setStyleSheet("font-size: 10px; padding: 2px 6px;")
+        btn_profiles = QPushButton("Profiles")
+        btn_profiles.setFixedHeight(16)
+        btn_profiles.setStyleSheet("font-size: 9px; padding: 0px 4px;")
         btn_profiles.clicked.connect(lambda: os.startfile(self.config_mgr.PROFILES_DIR if hasattr(self.config_mgr, 'PROFILES_DIR') else os.path.dirname(self.config_mgr.get_slot_paths(1)['ide_dir'])))
         footer.addWidget(btn_profiles)
 
@@ -213,8 +221,8 @@ class DashboardWindow(QMainWindow):
     def on_stop_all_clicked(self):
         reply = QMessageBox.question(
             self,
-            "ยืนยันการปิดทั้งหมด",
-            "คุณต้องการปิด Antigravity IDE ทั้งหมด 6 ช่องใช่หรือไม่?",
+            "Confirm",
+            "Stop all Antigravity IDE instances?",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
@@ -240,7 +248,7 @@ class DashboardWindow(QMainWindow):
             card.update_status_display()
             if self.proc_mgr.is_running(card.slot_id):
                 running_count += 1
-        self.status_summary.setText(f"🟢 กำลังทำงาน: {running_count}/6 Slots")
+        self.status_summary.setText(f"Active: {running_count}/6 Slots")
 
     def poll_realtime_status(self):
         running_count = 0
@@ -248,4 +256,4 @@ class DashboardWindow(QMainWindow):
             card.update_status_display()
             if self.proc_mgr.is_running(card.slot_id):
                 running_count += 1
-        self.status_summary.setText(f"🟢 กำลังทำงาน: {running_count}/6 Slots | Control Deck")
+        self.status_summary.setText(f"Active: {running_count}/6 Slots")
