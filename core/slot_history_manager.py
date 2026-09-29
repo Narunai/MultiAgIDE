@@ -15,6 +15,8 @@ class SlotHistoryRecord:
         self.rolling_5h_pct: int = 100
         self.weekly_str: str = "--"
         self.reset_5h_str: str = "--"
+        self.weekly_ts: float = 0
+        self.reset_5h_ts: float = 0
         self.last_launched_at: float = 0
         self.last_stopped_at: float = 0
         self.last_active_at: float = 0
@@ -28,6 +30,8 @@ class SlotHistoryRecord:
             "rolling_5h_pct": self.rolling_5h_pct,
             "weekly_str": self.weekly_str,
             "reset_5h_str": self.reset_5h_str,
+            "weekly_ts": self.weekly_ts,
+            "reset_5h_ts": self.reset_5h_ts,
             "last_launched_at": self.last_launched_at,
             "last_stopped_at": self.last_stopped_at,
             "last_active_at": self.last_active_at,
@@ -42,6 +46,8 @@ class SlotHistoryRecord:
         rec.rolling_5h_pct = data.get("rolling_5h_pct", 100)
         rec.weekly_str = data.get("weekly_str", "--")
         rec.reset_5h_str = data.get("reset_5h_str", "--")
+        rec.weekly_ts = data.get("weekly_ts", 0)
+        rec.reset_5h_ts = data.get("reset_5h_ts", 0)
         rec.last_launched_at = data.get("last_launched_at", 0)
         rec.last_stopped_at = data.get("last_stopped_at", 0)
         rec.last_active_at = data.get("last_active_at", 0)
@@ -126,6 +132,8 @@ class SlotHistoryManager:
         rec.rolling_5h_pct = q.rolling_5h_pct
         rec.weekly_str = q.weekly_str
         rec.reset_5h_str = q.reset_5h_str
+        rec.weekly_ts = q.weekly_ts
+        rec.reset_5h_ts = q.reset_5h_ts
         rec.last_active_at = time.time()
         self._save()
 

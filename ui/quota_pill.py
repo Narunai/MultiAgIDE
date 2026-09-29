@@ -60,7 +60,7 @@ class QuotaPillWidget(QFrame):
 
         main_layout.addLayout(row2)
 
-    def update_quota(self, q: QuotaInfo, is_running: bool = False, is_last_used: bool = False, is_empty: bool = False):
+    def update_quota(self, q: QuotaInfo, is_running: bool = False, is_last_used: bool = False, is_empty: bool = False, is_cooldown_finished: bool = False):
         email_short = q.email.split("@")[0] if ("@" in q.email and q.email != "offline") else q.email
 
         if is_running:
@@ -80,7 +80,11 @@ class QuotaPillWidget(QFrame):
             )
         else:
             # STOPPED Mode: แสดงโควตาล่าสุดที่บันทึกไว้ เพื่อให้ผู้ใช้ตัดสินใจได้ถูกต้อง
-            if is_empty or q.gemini_pct <= 5:
+            if is_cooldown_finished:
+                # Cooldown เสร็จแล้ว ให้แสดงสีเขียวถึงแม้เปอร์เซ็นต์จะเป็นศูนย์
+                self.lbl_g.setText(f"<b style='color: #4ade80;'>G:</b> <span style='color: #86efac; font-weight: 600;'>{q.gemini_pct}%</span>")
+                self.lbl_5h.setText(f"<b style='color: #4ade80;'>5H:</b> <span style='color: #86efac; font-weight: 600;'>{q.rolling_5h_pct}%</span>")
+            elif is_empty or q.gemini_pct <= 5:
                 # โควตาหมดแล้ว -> สีส้มแดงเตือนภัย
                 self.lbl_g.setText(f"<b style='color: #f87171;'>G:</b> <span style='color: #f87171; font-weight: 700;'>{q.gemini_pct}%</span>")
                 self.lbl_5h.setText(f"<b style='color: #f87171;'>5H:</b> <span style='color: #f87171; font-weight: 700;'>{q.rolling_5h_pct}%</span>")
@@ -96,7 +100,10 @@ class QuotaPillWidget(QFrame):
             self.lbl_5h_reset.setText(f"5H: {q.reset_5h_str}")
 
             # แท็กสถานะ: แยกความสำคัญชัดเจน
-            if is_last_used:
+            if is_cooldown_finished:
+                self.status_tag.setText("READY")
+                self.status_tag.setStyleSheet("color: #22c55e; font-size: 8px; font-weight: 700;")
+            elif is_last_used:
                 self.status_tag.setText("LAST USED")
                 self.status_tag.setStyleSheet("color: #38bdf8; font-size: 8px; font-weight: 700;")
             elif is_empty or (q.gemini_pct <= 5 and q.rolling_5h_pct <= 5):
@@ -118,10 +125,12 @@ class QuotaPillWidget(QFrame):
                 f"โควตาล่าสุด: Gemini {q.gemini_pct}% | 5H {q.rolling_5h_pct}%",
                 f"เวลารีเซ็ต: 5H ({q.reset_5h_str}) | สัปดาห์ ({q.weekly_str})"
             ]
-            if is_last_used:
+            if is_cooldown_finished:
+                tip_lines.append("[READY] Cooldown เสร็จสิ้นแล้ว พร้อมใช้งาน (กดเปิดเพื่อรีเฟรชโควตา)")
+            elif is_last_used:
                 tip_lines.append("[LAST USED] บัญชีนี้ถูกเปิดใช้งานล่าสุด")
             if is_empty or q.gemini_pct <= 5:
                 tip_lines.append("[EMPTY] โควตาหมดแล้ว! หลีกเลี่ยงการเปิดสล็อตนี้ชั่วคราว")
-            elif q.gemini_pct >= 90:
+            elif q.gemini_pct >= 90 and not is_cooldown_finished:
                 tip_lines.append("[READY] โควตาเต็มพร้อมใช้งาน")
             self.setToolTip("\n".join(tip_lines))

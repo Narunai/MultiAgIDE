@@ -16,6 +16,8 @@ class QuotaInfo:
         self.rolling_5h_pct: int = 100
         self.reset_5h_str: str = "--"
         self.weekly_str: str = "--"
+        self.reset_5h_ts: float = 0
+        self.weekly_ts: float = 0
         self.third_party_weekly_pct: int = 100
         self.third_party_5h_pct: int = 100
         self.is_exhausted: bool = False
@@ -202,6 +204,13 @@ class QuotaService:
 
         return None, None
 
+    def _parse_iso_to_ts(self, r_time_str: str) -> float:
+        try:
+            dt = datetime.datetime.fromisoformat(r_time_str.replace("Z", "+00:00"))
+            return dt.timestamp()
+        except Exception:
+            return 0
+
     def _format_time_remaining(self, r_time_str: str, now: datetime.datetime, show_days: bool = True) -> str:
         try:
             dt = datetime.datetime.fromisoformat(r_time_str.replace("Z", "+00:00"))
@@ -251,6 +260,7 @@ class QuotaService:
                                 info.gemini_pct = int(frac * 100)
                             if r_time:
                                 info.weekly_str = self._format_time_remaining(r_time, now, show_days=True)
+                                info.weekly_ts = self._parse_iso_to_ts(r_time)
                                 summary_parsed = True
 
                         elif bid == "gemini-5h" or win == "5h":
@@ -258,6 +268,7 @@ class QuotaService:
                                 info.rolling_5h_pct = int(frac * 100)
                             if r_time:
                                 info.reset_5h_str = self._format_time_remaining(r_time, now, show_days=False)
+                                info.reset_5h_ts = self._parse_iso_to_ts(r_time)
 
                 elif "claude" in d_name or "gpt" in d_name or "3p" in d_name:
                     for b in buckets:
@@ -303,6 +314,7 @@ class QuotaService:
 
             if short_reset_times:
                 earliest_5h = min(short_reset_times)
+                info.reset_5h_ts = earliest_5h.timestamp()
                 diff = earliest_5h - now
                 sec = int(diff.total_seconds())
                 h = sec // 3600
@@ -310,12 +322,15 @@ class QuotaService:
                 info.reset_5h_str = f"{h}h {m:02d}m" if h > 0 or m > 0 else "Ready"
             else:
                 info.reset_5h_str = "Ready"
+                info.reset_5h_ts = 0
 
             if weekly_reset_times:
                 earliest_weekly = min(weekly_reset_times)
+                info.weekly_ts = earliest_weekly.timestamp()
                 diff = earliest_weekly - now
                 d = diff.days
                 h = (diff.seconds) // 3600
                 info.weekly_str = f"{d}d {h:02d}h" if d > 0 else f"{h}h"
             else:
                 info.weekly_str = "Ready"
+                info.weekly_ts = 0

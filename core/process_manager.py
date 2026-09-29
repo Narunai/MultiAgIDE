@@ -123,12 +123,32 @@ class ProcessManager:
             self.history_mgr.record_quota(slot_id, q)
         return q
 
-    def get_slot_display_quota(self, slot_id: int) -> Tuple[QuotaInfo, bool, bool]:
+    def _format_ts_remaining(self, ts: float, show_days: bool = True) -> str:
+        if not ts or ts <= 0:
+            return "Ready"
+        now = time.time()
+        if ts <= now:
+            return "Ready"
+        sec = int(ts - now)
+        days = sec // 86400
+        hours = (sec % 86400) // 3600
+        mins = (sec % 3600) // 60
+        if show_days and days > 0:
+            return f"{days}d {hours:02d}h"
+        elif hours > 0:
+            return f"{hours}h {mins:02d}m"
+        elif mins > 0:
+            return f"{mins}m"
+        else:
+            return "Ready"
+
+    def get_slot_display_quota(self, slot_id: int) -> Tuple[QuotaInfo, bool, bool, bool]:
         """
         ส่งคืนข้อมูล Quota สำหรับแสดงผลบนการ์ด:
         - QuotaInfo (ค่าสดหากรันอยู่ หรือค่าล่าสุดที่จำไว้หากปิดอยู่)
         - is_last_used (เป็นสล็อตที่ใช้งานล่าสุดหรือไม่)
         - is_empty (โควตาหมดแล้วหรือไม่ <= 5%)
+        - is_cooldown_finished (ปิดอยู่แต่เวลารีเซ็ตครบแล้ว ให้ขึ้นตัวเขียวพร้อมใช้งาน)
         """
         running = self.is_running(slot_id)
         last_used_sid = self.history_mgr.get_last_used_slot_id()
@@ -137,7 +157,7 @@ class ProcessManager:
         if running:
             q = self.refresh_quota(slot_id)
             is_empty = (q.gemini_pct <= 5 and q.rolling_5h_pct <= 5)
-            return q, is_last_used, is_empty
+            return q, is_last_used, is_empty, False
 
         # หากปิดอยู่: ดึงค่าจากประวัติล่าสุดที่จำไว้ (Offline Display Mode)
         rec = self.history_mgr.get_record(slot_id)
@@ -147,10 +167,23 @@ class ProcessManager:
         q.plan = rec.plan
         q.gemini_pct = rec.gemini_pct
         q.rolling_5h_pct = rec.rolling_5h_pct
-        q.weekly_str = rec.weekly_str
-        q.reset_5h_str = rec.reset_5h_str
+        q.weekly_ts = rec.weekly_ts
+        q.reset_5h_ts = rec.reset_5h_ts
+        
+        # คำนวณเวลาที่เหลือจาก timestamp 
+        q.weekly_str = self._format_ts_remaining(q.weekly_ts, show_days=True) if q.weekly_ts > 0 else rec.weekly_str
+        q.reset_5h_str = self._format_ts_remaining(q.reset_5h_ts, show_days=False) if q.reset_5h_ts > 0 else rec.reset_5h_str
+
         is_empty = (rec.gemini_pct <= 5 and rec.rolling_5h_pct <= 5)
-        return q, is_last_used, is_empty
+        
+        # ตรวจสอบว่า cooldown เสร็จแล้วหรือไม่ (เดิมที empty แต่ตอนนี้เวลาปัจจุบันผ่านเวลา reset ไปแล้ว)
+        is_cooldown_finished = False
+        if is_empty and q.reset_5h_ts > 0 and time.time() >= q.reset_5h_ts:
+            is_cooldown_finished = True
+            is_empty = False # ไม่ถือว่า empty อีกต่อไปเพราะ cooldown เสร็จแล้ว แต่เปอร์เซ็นต์อาจจะยังแสดง 0% เพื่อรอเข้ามารีเฟรช
+            q.reset_5h_str = "Ready"
+            
+        return q, is_last_used, is_empty, is_cooldown_finished
 
     def launch_slot(self, slot_id: int):
         """
