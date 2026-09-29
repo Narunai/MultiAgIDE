@@ -31,7 +31,7 @@ class QuotaService:
         self.ssl_ctx.check_hostname = False
         self.ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    def fetch_slot_quota(self, slot_id: int, ide_root_pid: Optional[int] = None) -> QuotaInfo:
+    def fetch_slot_quota(self, slot_id: int, ide_root_pid: Optional[int] = None, ls_proc: Optional[psutil.Process] = None) -> QuotaInfo:
         """
         ดึงข้อมูล Quota และ Token ประจำสล็อตนั้นแบบ 100% Strict Isolation
         - ห้ามจับโปรเซสของ Antigravity ทั่วไปในเครื่องเด็ดขาด
@@ -39,7 +39,8 @@ class QuotaService:
         """
         info = self.cache.get(slot_id, QuotaInfo())
 
-        ls_proc = self._find_language_server_for_slot(slot_id, ide_root_pid)
+        if not ls_proc:
+            ls_proc = self._find_language_server_for_slot(slot_id, ide_root_pid)
         if not ls_proc:
             info.connected = False
             info.email = "offline"

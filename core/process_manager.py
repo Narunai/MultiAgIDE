@@ -23,6 +23,9 @@ class SlotState:
         self.is_hidden: bool = False
         self.is_maximized: bool = False
         self.quota_info: QuotaInfo = QuotaInfo()
+        self.ls_proc = None
+        self.last_io_bytes: int = 0
+        self.is_generating: bool = False
 
 
 class ProcessManager:
@@ -115,9 +118,30 @@ class ProcessManager:
         state = self.slots[slot_id]
         if not self.is_running(slot_id):
             state.quota_info = QuotaInfo()
+            state.is_generating = False
             return state.quota_info
 
-        q = self.quota_svc.fetch_slot_quota(slot_id, state.ide_pid)
+        if not state.ls_proc or not state.ls_proc.is_running():
+            state.ls_proc = self.quota_svc._find_language_server_for_slot(slot_id, state.ide_pid)
+            state.last_io_bytes = 0
+            state.is_generating = False
+
+        if state.ls_proc and state.ls_proc.is_running():
+            try:
+                io = state.ls_proc.io_counters()
+                total_io = io.read_bytes + io.write_bytes + io.other_bytes
+                if state.last_io_bytes > 0 and (total_io - state.last_io_bytes) > 2000:
+                    state.is_generating = True
+                else:
+                    state.is_generating = False
+                state.last_io_bytes = total_io
+            except Exception:
+                state.is_generating = False
+                state.ls_proc = None
+        else:
+            state.is_generating = False
+
+        q = self.quota_svc.fetch_slot_quota(slot_id, state.ide_pid, state.ls_proc)
         state.quota_info = q
         if q.connected:
             self.history_mgr.record_quota(slot_id, q)
@@ -142,22 +166,24 @@ class ProcessManager:
         else:
             return "Ready"
 
-    def get_slot_display_quota(self, slot_id: int) -> Tuple[QuotaInfo, bool, bool, bool]:
+    def get_slot_display_quota(self, slot_id: int) -> Tuple[QuotaInfo, bool, bool, bool, bool]:
         """
         ส่งคืนข้อมูล Quota สำหรับแสดงผลบนการ์ด:
         - QuotaInfo (ค่าสดหากรันอยู่ หรือค่าล่าสุดที่จำไว้หากปิดอยู่)
         - is_last_used (เป็นสล็อตที่ใช้งานล่าสุดหรือไม่)
         - is_empty (โควตาหมดแล้วหรือไม่ <= 5%)
         - is_cooldown_finished (ปิดอยู่แต่เวลารีเซ็ตครบแล้ว ให้ขึ้นตัวเขียวพร้อมใช้งาน)
+        - is_generating (กำลังถูกใช้งานเจมิไนอยู่หรือไม่)
         """
         running = self.is_running(slot_id)
         last_used_sid = self.history_mgr.get_last_used_slot_id()
         is_last_used = (last_used_sid == slot_id)
+        is_generating = self.slots[slot_id].is_generating
 
         if running:
             q = self.refresh_quota(slot_id)
             is_empty = (q.gemini_pct <= 5 and q.rolling_5h_pct <= 5)
-            return q, is_last_used, is_empty, False
+            return q, is_last_used, is_empty, False, is_generating
 
         # หากปิดอยู่: ดึงค่าจากประวัติล่าสุดที่จำไว้ (Offline Display Mode)
         rec = self.history_mgr.get_record(slot_id)
@@ -183,7 +209,7 @@ class ProcessManager:
             is_empty = False # ไม่ถือว่า empty อีกต่อไปเพราะ cooldown เสร็จแล้ว แต่เปอร์เซ็นต์อาจจะยังแสดง 0% เพื่อรอเข้ามารีเฟรช
             q.reset_5h_str = "Ready"
             
-        return q, is_last_used, is_empty, is_cooldown_finished
+        return q, is_last_used, is_empty, is_cooldown_finished, False
 
     def launch_slot(self, slot_id: int):
         """

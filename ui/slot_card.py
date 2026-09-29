@@ -187,7 +187,7 @@ class SlotCard(QFrame):
         else:
             running = self.proc_mgr.is_running(self.slot_id)
 
-        q, is_last_used, is_empty, is_cooldown_finished = self.proc_mgr.get_slot_display_quota(self.slot_id)
+        q, is_last_used, is_empty, is_cooldown_finished, is_generating = self.proc_mgr.get_slot_display_quota(self.slot_id)
 
         if running:
             self.status_badge.setText("RUNNING")
@@ -195,7 +195,7 @@ class SlotCard(QFrame):
             self.btn_toggle_run.setText("Stop")
             self.btn_toggle_run.setProperty("class", "DangerBtn")
             self.btn_toggle_run.setToolTip(f"คลิกเพื่อปิดสล็อต #{self.slot_id} ({q.email})")
-            self.quota_pill.update_quota(q, is_running=True, is_last_used=is_last_used, is_empty=is_empty, is_cooldown_finished=False)
+            self.quota_pill.update_quota(q, is_running=True, is_last_used=is_last_used, is_empty=is_empty, is_cooldown_finished=False, is_generating=is_generating)
         else:
             self.status_badge.setText("STOPPED")
             self.status_badge.setObjectName("BadgeStopped")
@@ -211,7 +211,7 @@ class SlotCard(QFrame):
             else:
                 self.btn_toggle_run.setToolTip(f"เปิดสล็อต #{self.slot_id} ({q.email}) โควตา {q.gemini_pct}%")
 
-            self.quota_pill.update_quota(q, is_running=False, is_last_used=is_last_used, is_empty=is_empty, is_cooldown_finished=is_cooldown_finished)
+            self.quota_pill.update_quota(q, is_running=False, is_last_used=is_last_used, is_empty=is_empty, is_cooldown_finished=is_cooldown_finished, is_generating=False)
 
         self.status_badge.style().polish(self.status_badge)
         self.btn_toggle_run.style().polish(self.btn_toggle_run)

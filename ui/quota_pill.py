@@ -60,7 +60,7 @@ class QuotaPillWidget(QFrame):
 
         main_layout.addLayout(row2)
 
-    def update_quota(self, q: QuotaInfo, is_running: bool = False, is_last_used: bool = False, is_empty: bool = False, is_cooldown_finished: bool = False):
+    def update_quota(self, q: QuotaInfo, is_running: bool = False, is_last_used: bool = False, is_empty: bool = False, is_cooldown_finished: bool = False, is_generating: bool = False):
         email_short = q.email.split("@")[0] if ("@" in q.email and q.email != "offline") else q.email
 
         if is_running:
@@ -68,13 +68,20 @@ class QuotaPillWidget(QFrame):
             self.lbl_5h.setText(f"<b style='color: #a78bfa;'>5H:</b> <b>{q.rolling_5h_pct}%</b>")
             self.lbl_w_reset.setText(f"W: {q.weekly_str}")
             self.lbl_5h_reset.setText(f"5H: {q.reset_5h_str}")
-            self.status_tag.setText("ACTIVE")
-            self.status_tag.setStyleSheet("color: #4ade80; font-size: 8px; font-weight: 700;")
+            if is_generating:
+                self.status_tag.setText("GENERATING")
+                self.status_tag.setStyleSheet("color: #fbbf24; font-size: 8px; font-weight: 700;") # Amber/Yellow warning color
+                status_text = "กำลังเจนคำตอบ (GENERATING...)"
+            else:
+                self.status_tag.setText("ACTIVE")
+                self.status_tag.setStyleSheet("color: #4ade80; font-size: 8px; font-weight: 700;")
+                status_text = "กำลังทำงาน (RUNNING)"
+
             self.lbl_account.setText(email_short)
             self.lbl_account.setStyleSheet("color: #a1a1aa; font-size: 9px;")
             self.setToolTip(
                 f"บัญชี: {q.email}\n"
-                f"สถานะ: กำลังทำงาน (RUNNING)\n"
+                f"สถานะ: {status_text}\n"
                 f"Gemini Quota: {q.gemini_pct}% (รีเซ็ต: {q.weekly_str})\n"
                 f"5-Hour Quota: {q.rolling_5h_pct}% (รีเซ็ต: {q.reset_5h_str})"
             )
