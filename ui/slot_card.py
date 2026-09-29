@@ -213,5 +213,29 @@ class SlotCard(QFrame):
 
             self.quota_pill.update_quota(q, is_running=False, is_last_used=is_last_used, is_empty=is_empty, is_cooldown_finished=is_cooldown_finished, is_generating=False)
 
+        # ซิงค์สถานะปุ่ม Maximize/Restore ให้ตรงกับ ProcessManager (กรณีไปกด Max สล็อตอื่น)
+        is_max = (self.proc_mgr.maximized_slot_id == self.slot_id)
+        if is_max:
+            if self.btn_maximize.text() != "Restore":
+                self.btn_maximize.setText("Restore")
+                self.btn_maximize.setStyleSheet("background-color: #d97706; color: white;")
+        else:
+            if self.btn_maximize.text() != "Max":
+                self.btn_maximize.setText("Max")
+                self.btn_maximize.setStyleSheet("")
+                
+        # ซิงค์สถานะปุ่ม Hide/Show
+        state = self.proc_mgr.slots.get(self.slot_id)
+        if state:
+            is_visible = not state.is_hidden
+            if is_visible:
+                if self.btn_hide.text() != "Hide":
+                    self.btn_hide.setText("Hide")
+                    self.btn_hide.setStyleSheet("")
+            else:
+                if self.btn_hide.text() != "Show":
+                    self.btn_hide.setText("Show")
+                    self.btn_hide.setStyleSheet("background-color: #3f3f46; color: #71717a;")
+
         self.status_badge.style().polish(self.status_badge)
         self.btn_toggle_run.style().polish(self.btn_toggle_run)
