@@ -42,32 +42,70 @@ class ProcessManager:
     def get_slot_state(self, slot_id: int) -> SlotState:
         return self.slots[slot_id]
 
+    def _cleanup_slot_orphans(self, slot_id: int):
+        """ทำความสะอาดโปรเซสลูกหลานหรือ helper ที่ค้างอยู่ของสล็อตนี้"""
+        slot_tag = f"slot_{slot_id}"
+        for p in psutil.process_iter(['pid', 'name']):
+            try:
+                cmd = " ".join(p.cmdline() or []).lower()
+                if slot_tag in cmd:
+                    if "appdata\\roaming\\antigravity" not in cmd:
+                        try:
+                            psutil.Process(p.info['pid']).kill()
+                        except Exception:
+                            pass
+            except Exception:
+                continue
+
     def is_running(self, slot_id: int) -> bool:
         """ตรวจสอบว่า Antigravity IDE ประจำสล็อตนี้กำลังทำงานอยู่หรือไม่"""
         state = self.slots[slot_id]
+
+        # 1. ถ้ามี HWND หน้าต่าง แต่หน้าต่างถูกปิดไปแล้ว (ผู้ใช้กด X บนหน้าต่าง IDE)
+        if state.ide_hwnd:
+            if not self.win_ctrl.is_window_alive(state.ide_hwnd):
+                state.ide_hwnd = None
+                state.ide_pid = None
+                state.ide_proc = None
+                self._cleanup_slot_orphans(slot_id)
+                state.quota_info = QuotaInfo()
+                return False
+
+        # 2. ตรวจสอบว่า Main IDE process ยังมีชีวิตอยู่หรือไม่ (เร็วมาก O(1))
         if state.ide_pid:
             if psutil.pid_exists(state.ide_pid):
                 try:
                     proc = psutil.Process(state.ide_pid)
                     if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
-                        return True
+                        cmd = " ".join(proc.cmdline() or []).lower()
+                        # โปรเซสหลักของ IDE ต้องไม่ใช่ child helper ที่มี --type=
+                        if "--type=" not in cmd:
+                            return True
                 except Exception:
                     pass
+            # ถ้า PID เดิมตายไปแล้ว ให้เคลียร์ orphans และรีเซ็ตสถานะ
             state.ide_pid = None
+            state.ide_hwnd = None
+            state.ide_proc = None
+            self._cleanup_slot_orphans(slot_id)
+            state.quota_info = QuotaInfo()
+            return False
 
-        # ตรวจสอบเพิ่มเติมว่ามีโปรเซส Antigravity IDE รันด้วย user-data-dir ของสล็อตนี้หรือไม่
+        # 3. ค้นหาเฉพาะโปรเซสหลักของ IDE (ต้องมี user-data-dir ของสล็อตนี้ และไม่มี --type=)
         slot_tag = f"slot_{slot_id}"
         for p in psutil.process_iter(['pid', 'name']):
             try:
                 if "antigravity" in p.info['name'].lower():
                     cmd = " ".join(p.cmdline() or []).lower()
-                    if slot_tag in cmd and "user-data-dir" in cmd:
+                    if slot_tag in cmd and "user-data-dir" in cmd and "--type=" not in cmd:
                         state.ide_pid = p.info['pid']
                         return True
             except Exception:
                 continue
 
         state.ide_hwnd = None
+        state.ide_pid = None
+        state.ide_proc = None
         state.quota_info = QuotaInfo()
         return False
 
@@ -143,7 +181,7 @@ class ProcessManager:
         for p in psutil.process_iter(['pid', 'name']):
             try:
                 cmd = " ".join(p.cmdline() or []).lower()
-                if slot_tag in cmd:
+                if slot_tag in cmd and "appdata\\roaming\\antigravity" not in cmd:
                     pids_to_kill.add(p.info['pid'])
             except Exception:
                 continue

@@ -145,11 +145,14 @@ class SlotCard(QFrame):
         self.config_mgr.save_config()
 
     def on_toggle_run_clicked(self):
-        if self.proc_mgr.is_running(self.slot_id):
+        # ตัดสินใจจากข้อความบนปุ่มโดยตรง ป้องกัน race condition ไม่ให้กด Stop แล้วกลายเป็นการเปิด
+        action = self.btn_toggle_run.text().strip()
+        if action == "Stop":
             self.proc_mgr.stop_slot(self.slot_id)
+            self.update_status_display(force_stopped=True)
         else:
             self.proc_mgr.launch_slot(self.slot_id)
-        self.update_status_display()
+            self.update_status_display(force_running=True)
         self.layout_changed.emit()
 
     def on_maximize_clicked(self):
@@ -176,8 +179,13 @@ class SlotCard(QFrame):
         dialog = LogViewerDialog(self.slot_id, self.proc_mgr, self)
         dialog.exec()
 
-    def update_status_display(self):
-        running = self.proc_mgr.is_running(self.slot_id)
+    def update_status_display(self, force_stopped: bool = False, force_running: bool = False):
+        if force_stopped:
+            running = False
+        elif force_running:
+            running = True
+        else:
+            running = self.proc_mgr.is_running(self.slot_id)
 
         if running:
             self.status_badge.setText("RUNNING")

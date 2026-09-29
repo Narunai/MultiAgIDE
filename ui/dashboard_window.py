@@ -41,10 +41,10 @@ class DashboardWindow(QMainWindow):
         self.slot_cards = []
         self.init_ui()
 
-        # Real-time Auto-Refresh Timer (every 2.5 seconds)
+        # Real-time Auto-Refresh Timer (every 1.5 seconds)
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.poll_realtime_status)
-        self.refresh_timer.start(2500)
+        self.refresh_timer.start(1500)
 
     def init_geometry(self):
         """ขนาดกะทัดรัด (กว้าง 360px, สูง 490px) มองเห็นครบ 6 สล็อตในจอเดียว 100%"""

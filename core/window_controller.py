@@ -62,6 +62,12 @@ class WindowController:
         found_hwnds.sort(key=lambda x: x[1], reverse=True)
         return found_hwnds[0][0]
 
+    def is_window_alive(self, hwnd: Optional[int]) -> bool:
+        """ตรวจสอบว่าหน้าต่าง HWND ยังคงมีอยู่จริงในระบบหรือไม่"""
+        if not hwnd:
+            return False
+        return bool(win32gui.IsWindow(hwnd))
+
     def set_window_bounds(self, hwnd: int, x: int, y: int, width: int, height: int):
         """ย้ายและปรับขนาดหน้าต่างไปยังพิกัดเป้าหมาย"""
         if not win32gui.IsWindow(hwnd):
