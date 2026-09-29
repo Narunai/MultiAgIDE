@@ -14,9 +14,7 @@ DEFAULT_CONFIG = {
     "ide_path": DEFAULT_IDE_PATH,
     "chrome_path": DEFAULT_CHROME_PATH,
     "max_slots": 6,
-    "pairing_mode": "side_by_side",  # "side_by_side" or "toggle"
-    "ide_width_ratio": 0.60,         # 60% IDE, 40% Chrome in side_by_side mode
-    "active_layout": "matrix_6",     # "focus_1", "split_2", "trio_3", "quad_4", "matrix_6"
+    "active_layout": "matrix_6",
     "slots": [
         {"id": 1, "name": "Slot 1 (Main)", "visible": True, "notes": "Google Account #1"},
         {"id": 2, "name": "Slot 2", "visible": True, "notes": "Google Account #2"},
@@ -40,7 +38,6 @@ class ConfigManager:
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
-                # Merge missing keys from default
                 for k, v in DEFAULT_CONFIG.items():
                     if k not in loaded:
                         loaded[k] = v
@@ -60,14 +57,15 @@ class ConfigManager:
             slot_id = slot["id"]
             slot_dir = PROFILES_DIR / f"slot_{slot_id}"
             (slot_dir / "ide").mkdir(parents=True, exist_ok=True)
-            (slot_dir / "chrome").mkdir(parents=True, exist_ok=True)
+            (slot_dir / "workspace").mkdir(parents=True, exist_ok=True)
+            (slot_dir / "logs").mkdir(parents=True, exist_ok=True)
 
     def get_slot_paths(self, slot_id: int):
         slot_dir = PROFILES_DIR / f"slot_{slot_id}"
         return {
             "ide_dir": str(slot_dir / "ide"),
-            "chrome_dir": str(slot_dir / "chrome"),
-            "workspace_dir": str(slot_dir / "workspace")
+            "workspace_dir": str(slot_dir / "workspace"),
+            "logs_dir": str(slot_dir / "logs")
         }
 
     def update_slot_visibility(self, slot_id: int, visible: bool):

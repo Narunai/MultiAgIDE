@@ -43,7 +43,7 @@ class ProcessManager:
         return self.slots[slot_id]
 
     def is_running(self, slot_id: int) -> bool:
-        """ตรวจสอบว่า Antigravity IDE ในสล็อตนี้กำลังทำงานอยู่หรือไม่"""
+        """ตรวจสอบว่า Antigravity IDE ประจำสล็อตนี้กำลังทำงานอยู่หรือไม่"""
         state = self.slots[slot_id]
         if state.ide_pid and psutil.pid_exists(state.ide_pid):
             try:
@@ -53,19 +53,36 @@ class ProcessManager:
                     return True
             except Exception:
                 pass
+
+        # ตรวจสอบเพิ่มเติมว่ามีโปรเซส Antigravity IDE รันด้วย user-data-dir ของสล็อตนี้หรือไม่
+        slot_tag = f"slot_{slot_id}"
+        for p in psutil.process_iter(['pid', 'name']):
+            try:
+                if "antigravity" in p.info['name'].lower():
+                    cmd = " ".join(p.cmdline() or []).lower()
+                    if slot_tag in cmd and "user-data-dir" in cmd:
+                        state.ide_pid = p.info['pid']
+                        return True
+            except Exception:
+                continue
+
         state.ide_hwnd = None
         return False
 
     def refresh_quota(self, slot_id: int) -> QuotaInfo:
         state = self.slots[slot_id]
+        if not self.is_running(slot_id):
+            state.quota_info = QuotaInfo()
+            return state.quota_info
+
         q = self.quota_svc.fetch_slot_quota(slot_id, state.ide_pid)
         state.quota_info = q
         return q
 
     def launch_slot(self, slot_id: int):
         """
-        สั่งเปิด Antigravity IDE แยกทั้ง User Data Directory และ Chat/Conversation Environment
-        100% Isolated: แยก Session, บัญชี Google, ประวัติการแชท (Conversations) และ Brain ออกจากกันเด็ดขาด
+        สั่งเปิด Antigravity IDE พร้อมผูก Workspace ประจำสล็อตอย่างถาวร
+        ทำให้ประวัติการแชท (Chat History) ไม่สูญหายเมื่อปิดแล้วเปิดใหม่
         """
         if self.is_running(slot_id):
             return
@@ -76,55 +93,72 @@ class ProcessManager:
 
         ide_path = cfg.get("ide_path")
         if os.path.exists(ide_path):
-            # แยก USERPROFILE เพื่อให้โฟลเดอร์ .gemini/ และประวัติแชทเก็บแยกเด็ดขาดในแต่ละสล็อต
-            slot_dir = self.profiles_dir / f"slot_{slot_id}"
-            slot_home = slot_dir / "home"
-            slot_home.mkdir(parents=True, exist_ok=True)
+            workspace_dir = paths["workspace_dir"]
+            os.makedirs(workspace_dir, exist_ok=True)
+            os.makedirs(paths["ide_dir"], exist_ok=True)
 
-            custom_env = os.environ.copy()
-            custom_env["USERPROFILE"] = str(slot_home)
-            custom_env["HOME"] = str(slot_home)
-            custom_env["XDG_DATA_HOME"] = str(slot_home / ".local" / "share")
-            custom_env["XDG_CONFIG_HOME"] = str(slot_home / ".config")
-
+            # ผูก Workspace ถาวร: เมื่อปิดแล้วเปิดใหม่ แชทและบริบทจะกลับมาครบ 100%
             cmd = [
                 ide_path,
                 "--user-data-dir", paths["ide_dir"],
-                "-n"
+                workspace_dir
             ]
-            proc = subprocess.Popen(cmd, env=custom_env, close_fds=True)
+            proc = subprocess.Popen(cmd, close_fds=True)
             state.ide_proc = proc
             state.ide_pid = proc.pid
-            self.logger.log_event(slot_id, "LAUNCH", f"Launched isolated IDE with PID {proc.pid}")
-            print(f"[Slot {slot_id}] Antigravity IDE launched with PID {proc.pid} (Isolated Home: {slot_home})")
+            self.logger.log_event(slot_id, "LAUNCH", f"Launched IDE with workspace {workspace_dir} (PID {proc.pid})")
+            print(f"[Slot {slot_id}] Antigravity IDE launched with persistent workspace {workspace_dir}")
 
-            # Start thread to resolve HWND and initial Quota
             threading.Thread(target=self._resolve_slot_after_launch, args=(slot_id,), daemon=True).start()
 
     def launch_all(self):
         visible_slots = [s["id"] for s in self.config_mgr.get_visible_slots()]
         for s_id in visible_slots:
             self.launch_slot(s_id)
-            time.sleep(0.4)
+            time.sleep(0.5)
 
     def stop_slot(self, slot_id: int):
-        """ปิด Antigravity IDE ในสล็อตนั้น"""
+        """ปิด Antigravity IDE ในสล็อตนั้นโดยเฉพาะ"""
         state = self.slots[slot_id]
+        slot_tag = f"slot_{slot_id}"
+
+        # 1. ปิดหน้าต่างนุ่มนวล
         if state.ide_hwnd:
             self.win_ctrl.close_window(state.ide_hwnd)
+
+        # 2. ปิดโปรเซสลูกหลานของสล็อตนี้ทั้งหมด
+        pids_to_kill = set()
         if state.ide_pid and psutil.pid_exists(state.ide_pid):
             try:
                 parent = psutil.Process(state.ide_pid)
                 for child in parent.children(recursive=True):
-                    child.kill()
-                parent.kill()
+                    pids_to_kill.add(child.pid)
+                pids_to_kill.add(state.ide_pid)
             except Exception:
                 pass
-        self.logger.log_event(slot_id, "STOP", "Stopped Antigravity IDE")
+
+        # สแกนหาโปรเซสที่ใช้ user-data-dir ของสล็อตนี้
+        for p in psutil.process_iter(['pid', 'name']):
+            try:
+                cmd = " ".join(p.cmdline() or []).lower()
+                if slot_tag in cmd:
+                    pids_to_kill.add(p.info['pid'])
+            except Exception:
+                continue
+
+        for pid in pids_to_kill:
+            try:
+                if psutil.pid_exists(pid):
+                    p = psutil.Process(pid)
+                    p.kill()
+            except Exception:
+                pass
+
+        self.logger.log_event(slot_id, "STOP", "Stopped slot processes")
         state.ide_pid = None
         state.ide_hwnd = None
         state.ide_proc = None
-        state.quota_info.connected = False
+        state.quota_info = QuotaInfo()
 
     def stop_all(self):
         for s_id in range(1, 7):
@@ -132,19 +166,28 @@ class ProcessManager:
 
     def _resolve_slot_after_launch(self, slot_id: int):
         state = self.slots[slot_id]
+        slot_tag = f"slot_{slot_id}"
         start_time = time.time()
 
         while time.time() - start_time < 12:
             time.sleep(1.0)
-            if state.ide_pid and not state.ide_hwnd:
-                pids = self.win_ctrl.get_descendant_pids(state.ide_pid)
-                hwnd = self.win_ctrl.find_window_by_pids(pids, title_filter="Antigravity")
-                if not hwnd:
-                    hwnd = self.win_ctrl.find_window_by_pids(pids)
-                if hwnd:
-                    state.ide_hwnd = hwnd
-                    print(f"[Slot {slot_id}] Found IDE HWND: {hwnd}")
-                    break
+            if not state.ide_hwnd:
+                # ค้นหาหน้าต่างที่มี slot_id ใน cmdline หรือชื่อ
+                for p in psutil.process_iter(['pid', 'name']):
+                    try:
+                        if "antigravity" in p.info['name'].lower():
+                            cmd = " ".join(p.cmdline() or []).lower()
+                            if slot_tag in cmd:
+                                hwnd = self.win_ctrl.find_window_by_pids({p.info['pid']})
+                                if hwnd:
+                                    state.ide_hwnd = hwnd
+                                    state.ide_pid = p.info['pid']
+                                    print(f"[Slot {slot_id}] Found HWND: {hwnd} for PID {p.info['pid']}")
+                                    break
+                    except Exception:
+                        continue
+            if state.ide_hwnd:
+                break
 
         self.refresh_quota(slot_id)
         self.apply_layout()

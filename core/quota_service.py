@@ -10,7 +10,7 @@ import psutil
 class QuotaInfo:
     def __init__(self):
         self.connected: bool = False
-        self.email: str = "Not Connected"
+        self.email: str = "offline"
         self.plan: str = "Free"
         self.gemini_pct: int = 100
         self.rolling_5h_pct: int = 100
@@ -28,36 +28,44 @@ class QuotaService:
         self.ssl_ctx.verify_mode = ssl.CERT_NONE
 
     def fetch_slot_quota(self, slot_id: int, ide_root_pid: Optional[int] = None) -> QuotaInfo:
-        """ดึงข้อมูล Quota และ Token ของ Antigravity IDE ประจำสล็อตนั้น"""
+        """
+        ดึงข้อมูล Quota และ Token ของ Antigravity IDE ประจำสล็อตนั้นแบบ 1:1 Strict Matching
+        ไม่ยืมหรือใช้ข้อมูลข้ามสล็อตโดยเด็ดขาด
+        """
         info = self.cache.get(slot_id, QuotaInfo())
 
-        # หา Language Server process ที่เกี่ยวข้อง
-        ls_proc = self._find_language_server(ide_root_pid)
+        ls_proc = self._find_language_server_for_slot(slot_id, ide_root_pid)
         if not ls_proc:
             info.connected = False
+            info.email = "offline"
             return info
 
         csrf_token = self._extract_csrf_token(ls_proc)
         ports = self._get_listening_ports(ls_proc.pid)
 
         if not ports:
+            info.connected = False
             return info
 
-        # เรียก Connect RPC API บน localhost
         user_status = self._query_user_status(ports, csrf_token)
         if not user_status:
+            info.connected = False
             return info
 
-        # ถอดรหัสข้อมูล Quota
         self._parse_quota_data(info, user_status)
         info.connected = True
         info.last_updated = time.time()
         self.cache[slot_id] = info
         return info
 
-    def _find_language_server(self, ide_root_pid: Optional[int] = None) -> Optional[psutil.Process]:
-        """ค้นหาโปรเซส Language Server ของ Antigravity"""
-        # 1. ถ้ามี PID ของ IDE ให้ค้นหาในลูกหลาน
+    def _find_language_server_for_slot(self, slot_id: int, ide_root_pid: Optional[int] = None) -> Optional[psutil.Process]:
+        """
+        ค้นหาโปรเซส Language Server ที่เป็นของสล็อตนี้เท่านั้น (Strict Slot Association)
+        ตรวจสอบจาก tag 'slot_{slot_id}' ใน command line หรือใน parent processes
+        """
+        target_tag = f"slot_{slot_id}"
+
+        # 1. ตรวจสอบจาก PID ลูกหลานของ IDE ที่เปิดโดยสล็อตนี้
         if ide_root_pid and psutil.pid_exists(ide_root_pid):
             try:
                 parent = psutil.Process(ide_root_pid)
@@ -68,14 +76,29 @@ class QuotaService:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
-        # 2. ถ้าไม่พบ หรือไม่มี PID ให้สแกนระบบหาตัวที่กำลังรันอยู่
+        # 2. ตรวจสอบโปรเซส language_server ทุกตัวที่มี tag ของสล็อตนี้โดยตรง
         for p in psutil.process_iter(['pid', 'name']):
             try:
                 name = p.info['name'].lower()
-                if "language_server" in name and "antigravity" in "".join(p.cmdline()).lower():
-                    return p
+                if "language_server" in name:
+                    cmd_str = " ".join(p.cmdline() or []).lower()
+                    if target_tag in cmd_str:
+                        return p
+
+                    # ตรวจสอบบรรพบุรุษ (Ancestors) ว่าเป็น IDE ของสล็อตนี้หรือไม่
+                    curr = p
+                    while curr and curr.ppid() != 0:
+                        parent = curr.parent()
+                        if not parent:
+                            break
+                        curr = parent
+                        p_cmd = " ".join(curr.cmdline() or []).lower()
+                        if target_tag in p_cmd:
+                            return p
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
+
+        # ไม่พบ Language Server ของสล็อตนี้ (ห้าม Fallback สุ่มเด็ดขาด)
         return None
 
     def _extract_csrf_token(self, proc: psutil.Process) -> Optional[str]:
@@ -134,7 +157,6 @@ class QuotaService:
         plan_info = user_status.get("planStatus", {}).get("planInfo", {})
         info.plan = plan_info.get("planName", "Pro")
 
-        # Models Quota Info
         model_configs = user_status.get("cascadeModelConfigData", {}).get("clientModelConfigs", [])
         now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -153,7 +175,6 @@ class QuotaService:
                 if r_time:
                     reset_times.append(r_time)
 
-        # Average / Minimum Gemini Fraction
         if gemini_fractions:
             min_frac = min(gemini_fractions)
             info.gemini_pct = int(min_frac * 100)
@@ -162,9 +183,7 @@ class QuotaService:
             info.gemini_pct = 100
             info.rolling_5h_pct = 100
 
-        # Calculate time until 5H reset
         if reset_times:
-            # ใช้ reset time ที่ใกล้ที่สุด
             earliest_reset = None
             for rt in reset_times:
                 try:
@@ -183,6 +202,4 @@ class QuotaService:
             else:
                 info.reset_5h_str = "Ready"
 
-        # Weekly window calculation (approx 7 days reset window)
-        # Typically Sunday midnight UTC or 7 days from period start
         info.weekly_str = "6d 23h"
