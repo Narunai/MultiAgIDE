@@ -187,20 +187,29 @@ class SlotCard(QFrame):
         else:
             running = self.proc_mgr.is_running(self.slot_id)
 
+        q, is_last_used, is_empty = self.proc_mgr.get_slot_display_quota(self.slot_id)
+
         if running:
             self.status_badge.setText("RUNNING")
             self.status_badge.setObjectName("BadgeRunning")
             self.btn_toggle_run.setText("Stop")
             self.btn_toggle_run.setProperty("class", "DangerBtn")
-            q = self.proc_mgr.refresh_quota(self.slot_id)
-            self.quota_pill.update_quota(q)
+            self.btn_toggle_run.setToolTip(f"คลิกเพื่อปิดสล็อต #{self.slot_id} ({q.email})")
+            self.quota_pill.update_quota(q, is_running=True, is_last_used=is_last_used, is_empty=is_empty)
         else:
             self.status_badge.setText("STOPPED")
             self.status_badge.setObjectName("BadgeStopped")
             self.btn_toggle_run.setText("Start")
             self.btn_toggle_run.setProperty("class", "SuccessBtn")
-            # When STOPPED, always show offline quota (never display another user or cached data)
-            self.quota_pill.update_quota(QuotaInfo())
+
+            if is_last_used:
+                self.btn_toggle_run.setToolTip(f"[LAST USED] บัญชีใช้งานล่าสุด: {q.email} (โควตา {q.gemini_pct}%)")
+            elif is_empty:
+                self.btn_toggle_run.setToolTip(f"[EMPTY] โควตาหมด ({q.gemini_pct}%) รีเซ็ตใน {q.reset_5h_str}")
+            else:
+                self.btn_toggle_run.setToolTip(f"เปิดสล็อต #{self.slot_id} ({q.email}) โควตา {q.gemini_pct}%")
+
+            self.quota_pill.update_quota(q, is_running=False, is_last_used=is_last_used, is_empty=is_empty)
 
         self.status_badge.style().polish(self.status_badge)
         self.btn_toggle_run.style().polish(self.btn_toggle_run)

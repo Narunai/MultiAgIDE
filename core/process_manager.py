@@ -2,7 +2,7 @@ import os
 import subprocess
 import time
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import psutil
 
@@ -11,6 +11,7 @@ from .window_controller import WindowController
 from .layout_calculator import LayoutCalculator
 from .quota_service import QuotaService, QuotaInfo
 from .conversation_logger import ConversationLogger
+from .slot_history_manager import SlotHistoryManager, SlotHistoryRecord
 
 
 class SlotState:
@@ -34,6 +35,7 @@ class ProcessManager:
         base_dir = Path(__file__).resolve().parent.parent
         self.profiles_dir = base_dir / "profiles"
         self.logger = ConversationLogger(self.profiles_dir)
+        self.history_mgr = SlotHistoryManager(self.profiles_dir)
 
         self.slots: Dict[int, SlotState] = {i: SlotState(i) for i in range(1, 7)}
         self._lock = threading.Lock()
@@ -117,7 +119,38 @@ class ProcessManager:
 
         q = self.quota_svc.fetch_slot_quota(slot_id, state.ide_pid)
         state.quota_info = q
+        if q.connected:
+            self.history_mgr.record_quota(slot_id, q)
         return q
+
+    def get_slot_display_quota(self, slot_id: int) -> Tuple[QuotaInfo, bool, bool]:
+        """
+        ส่งคืนข้อมูล Quota สำหรับแสดงผลบนการ์ด:
+        - QuotaInfo (ค่าสดหากรันอยู่ หรือค่าล่าสุดที่จำไว้หากปิดอยู่)
+        - is_last_used (เป็นสล็อตที่ใช้งานล่าสุดหรือไม่)
+        - is_empty (โควตาหมดแล้วหรือไม่ <= 5%)
+        """
+        running = self.is_running(slot_id)
+        last_used_sid = self.history_mgr.get_last_used_slot_id()
+        is_last_used = (last_used_sid == slot_id)
+
+        if running:
+            q = self.refresh_quota(slot_id)
+            is_empty = (q.gemini_pct <= 5 and q.rolling_5h_pct <= 5)
+            return q, is_last_used, is_empty
+
+        # หากปิดอยู่: ดึงค่าจากประวัติล่าสุดที่จำไว้ (Offline Display Mode)
+        rec = self.history_mgr.get_record(slot_id)
+        q = QuotaInfo()
+        q.connected = False
+        q.email = rec.email
+        q.plan = rec.plan
+        q.gemini_pct = rec.gemini_pct
+        q.rolling_5h_pct = rec.rolling_5h_pct
+        q.weekly_str = rec.weekly_str
+        q.reset_5h_str = rec.reset_5h_str
+        is_empty = (rec.gemini_pct <= 5 and rec.rolling_5h_pct <= 5)
+        return q, is_last_used, is_empty
 
     def launch_slot(self, slot_id: int):
         """
@@ -146,6 +179,7 @@ class ProcessManager:
             proc = subprocess.Popen(cmd, close_fds=True)
             state.ide_proc = proc
             state.ide_pid = proc.pid
+            self.history_mgr.record_launch(slot_id)
             self.logger.log_event(slot_id, "LAUNCH", f"Launched IDE with workspace {workspace_dir} (PID {proc.pid})")
             print(f"[Slot {slot_id}] Antigravity IDE launched with persistent workspace {workspace_dir}")
 
@@ -195,6 +229,7 @@ class ProcessManager:
                 pass
 
         self.logger.log_event(slot_id, "STOP", "Stopped slot processes")
+        self.history_mgr.record_stop(slot_id)
         state.ide_pid = None
         state.ide_hwnd = None
         state.ide_proc = None

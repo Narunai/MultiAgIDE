@@ -242,13 +242,29 @@ class DashboardWindow(QMainWindow):
         self.proc_mgr.apply_layout(reserve_deck_width=self.width())
         self.on_layout_or_status_changed()
 
+    def _update_status_summary(self, running_count: int):
+        running_sids = {c.slot_id for c in self.slot_cards if self.proc_mgr.is_running(c.slot_id)}
+        last_sid = self.proc_mgr.history_mgr.get_last_used_slot_id()
+        best_sid = self.proc_mgr.history_mgr.get_best_available_slot_id(running_sids)
+
+        parts = [f"Active: {running_count}/6"]
+        if last_sid:
+            rec_last = self.proc_mgr.history_mgr.get_record(last_sid)
+            email_part = rec_last.email.split('@')[0] if '@' in rec_last.email else rec_last.email
+            parts.append(f"Last: #{last_sid} ({email_part})")
+        if best_sid:
+            rec_best = self.proc_mgr.history_mgr.get_record(best_sid)
+            parts.append(f"Best: #{best_sid} ({rec_best.gemini_pct}%)")
+
+        self.status_summary.setText(" | ".join(parts))
+
     def on_layout_or_status_changed(self):
         running_count = 0
         for card in self.slot_cards:
             card.update_status_display()
             if self.proc_mgr.is_running(card.slot_id):
                 running_count += 1
-        self.status_summary.setText(f"Active: {running_count}/6 Slots")
+        self._update_status_summary(running_count)
 
     def poll_realtime_status(self):
         running_count = 0
@@ -256,4 +272,4 @@ class DashboardWindow(QMainWindow):
             card.update_status_display()
             if self.proc_mgr.is_running(card.slot_id):
                 running_count += 1
-        self.status_summary.setText(f"Active: {running_count}/6 Slots")
+        self._update_status_summary(running_count)

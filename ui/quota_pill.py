@@ -60,25 +60,68 @@ class QuotaPillWidget(QFrame):
 
         main_layout.addLayout(row2)
 
-    def update_quota(self, q: QuotaInfo):
-        if q.connected:
+    def update_quota(self, q: QuotaInfo, is_running: bool = False, is_last_used: bool = False, is_empty: bool = False):
+        email_short = q.email.split("@")[0] if ("@" in q.email and q.email != "offline") else q.email
+
+        if is_running:
             self.lbl_g.setText(f"<b style='color: #38bdf8;'>G:</b> <b>{q.gemini_pct}%</b>")
             self.lbl_5h.setText(f"<b style='color: #a78bfa;'>5H:</b> <b>{q.rolling_5h_pct}%</b>")
             self.lbl_w_reset.setText(f"W: {q.weekly_str}")
             self.lbl_5h_reset.setText(f"5H: {q.reset_5h_str}")
             self.status_tag.setText("ACTIVE")
-            self.status_tag.setStyleSheet("color: #4ade80; font-size: 9px; font-weight: 700;")
-            email_short = q.email.split("@")[0] if "@" in q.email else q.email
+            self.status_tag.setStyleSheet("color: #4ade80; font-size: 8px; font-weight: 700;")
             self.lbl_account.setText(email_short)
             self.lbl_account.setStyleSheet("color: #a1a1aa; font-size: 9px;")
-            self.setToolTip(f"อีเมล: {q.email}\nแพ็กเกจ: {q.plan}\nGemini Weekly: {q.gemini_pct}% (รีเซ็ต: {q.weekly_str})\nRolling 5H: {q.rolling_5h_pct}% (รีเซ็ต: {q.reset_5h_str})")
+            self.setToolTip(
+                f"บัญชี: {q.email}\n"
+                f"สถานะ: กำลังทำงาน (RUNNING)\n"
+                f"Gemini Quota: {q.gemini_pct}% (รีเซ็ต: {q.weekly_str})\n"
+                f"5-Hour Quota: {q.rolling_5h_pct}% (รีเซ็ต: {q.reset_5h_str})"
+            )
         else:
-            self.lbl_g.setText("<b style='color: #52525b;'>G:</b> <span style='color: #71717a;'>--%</span>")
-            self.lbl_5h.setText("<b style='color: #52525b;'>5H:</b> <span style='color: #71717a;'>--%</span>")
-            self.lbl_w_reset.setText("W: --")
-            self.lbl_5h_reset.setText("5H: --")
-            self.status_tag.setText("OFF")
-            self.status_tag.setStyleSheet("color: #52525b; font-size: 9px; font-weight: 700;")
-            self.lbl_account.setText("offline")
-            self.lbl_account.setStyleSheet("color: #52525b; font-size: 9px;")
-            self.setToolTip("ยังไม่ได้เปิด Antigravity IDE ในสล็อตนี้")
+            # STOPPED Mode: แสดงโควตาล่าสุดที่บันทึกไว้ เพื่อให้ผู้ใช้ตัดสินใจได้ถูกต้อง
+            if is_empty or q.gemini_pct <= 5:
+                # โควตาหมดแล้ว -> สีส้มแดงเตือนภัย
+                self.lbl_g.setText(f"<b style='color: #f87171;'>G:</b> <span style='color: #f87171; font-weight: 700;'>{q.gemini_pct}%</span>")
+                self.lbl_5h.setText(f"<b style='color: #f87171;'>5H:</b> <span style='color: #f87171; font-weight: 700;'>{q.rolling_5h_pct}%</span>")
+            elif q.gemini_pct >= 90:
+                # โควตาเต็ม -> สีเขียวพร้อมใช้งาน
+                self.lbl_g.setText(f"<b style='color: #4ade80;'>G:</b> <span style='color: #86efac; font-weight: 600;'>{q.gemini_pct}%</span>")
+                self.lbl_5h.setText(f"<b style='color: #4ade80;'>5H:</b> <span style='color: #86efac; font-weight: 600;'>{q.rolling_5h_pct}%</span>")
+            else:
+                self.lbl_g.setText(f"<b style='color: #71717a;'>G:</b> <span style='color: #d4d4d8;'>{q.gemini_pct}%</span>")
+                self.lbl_5h.setText(f"<b style='color: #71717a;'>5H:</b> <span style='color: #d4d4d8;'>{q.rolling_5h_pct}%</span>")
+
+            self.lbl_w_reset.setText(f"W: {q.weekly_str}")
+            self.lbl_5h_reset.setText(f"5H: {q.reset_5h_str}")
+
+            # แท็กสถานะ: แยกความสำคัญชัดเจน
+            if is_last_used:
+                self.status_tag.setText("LAST USED")
+                self.status_tag.setStyleSheet("color: #38bdf8; font-size: 8px; font-weight: 700;")
+            elif is_empty or (q.gemini_pct <= 5 and q.rolling_5h_pct <= 5):
+                self.status_tag.setText("EMPTY")
+                self.status_tag.setStyleSheet("color: #ef4444; font-size: 8px; font-weight: 700;")
+            elif q.gemini_pct >= 90:
+                self.status_tag.setText("READY")
+                self.status_tag.setStyleSheet("color: #22c55e; font-size: 8px; font-weight: 700;")
+            else:
+                self.status_tag.setText("OFF")
+                self.status_tag.setStyleSheet("color: #71717a; font-size: 9px; font-weight: 700;")
+
+            self.lbl_account.setText(email_short)
+            self.lbl_account.setStyleSheet("color: #71717a; font-size: 9px;")
+
+            tip_lines = [
+                f"บัญชี: {q.email}",
+                f"สถานะ: ปิดอยู่ (STOPPED)",
+                f"โควตาล่าสุด: Gemini {q.gemini_pct}% | 5H {q.rolling_5h_pct}%",
+                f"เวลารีเซ็ต: 5H ({q.reset_5h_str}) | สัปดาห์ ({q.weekly_str})"
+            ]
+            if is_last_used:
+                tip_lines.append("[LAST USED] บัญชีนี้ถูกเปิดใช้งานล่าสุด")
+            if is_empty or q.gemini_pct <= 5:
+                tip_lines.append("[EMPTY] โควตาหมดแล้ว! หลีกเลี่ยงการเปิดสล็อตนี้ชั่วคราว")
+            elif q.gemini_pct >= 90:
+                tip_lines.append("[READY] โควตาเต็มพร้อมใช้งาน")
+            self.setToolTip("\n".join(tip_lines))
