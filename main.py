@@ -9,12 +9,14 @@ sys.path.insert(0, str(BASE_DIR))
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QPalette, QColor
 from ui.dashboard_window import DashboardWindow
+from ui.dark_title_bar import create_minimal_app_icon, apply_dark_title_bar
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("MultiAgIDE Studio")
     app.setOrganizationName("MultiAgIDE")
+    app.setWindowIcon(create_minimal_app_icon())
 
     # Global Dark Palette - ป้องกันไม่ให้เกิดสีขาวหลุดรอดในทุก Widget & DWM Thumbnail
     palette = QPalette()
@@ -33,6 +35,7 @@ def main():
 
     window = DashboardWindow()
     window.show()
+    apply_dark_title_bar(window)
 
     sys.exit(app.exec())
 

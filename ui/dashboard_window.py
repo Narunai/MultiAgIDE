@@ -12,6 +12,7 @@ from core.process_manager import ProcessManager
 
 from .styles import DARK_THEME_QSS
 from .slot_card import SlotCard
+from .dark_title_bar import apply_dark_title_bar, create_minimal_app_icon
 
 
 class DashboardWindow(QMainWindow):
@@ -25,6 +26,8 @@ class DashboardWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MultiAgIDE Control Deck")
+        self.setWindowIcon(create_minimal_app_icon())
+        apply_dark_title_bar(self)
 
         # Core Engines
         self.config_mgr = ConfigManager()
@@ -273,3 +276,7 @@ class DashboardWindow(QMainWindow):
             if self.proc_mgr.is_running(card.slot_id):
                 running_count += 1
         self._update_status_summary(running_count)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        apply_dark_title_bar(self)

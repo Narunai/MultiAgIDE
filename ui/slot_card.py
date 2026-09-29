@@ -8,12 +8,15 @@ from core.process_manager import ProcessManager
 from core.config_manager import ConfigManager
 from core.quota_service import QuotaInfo
 from .quota_pill import QuotaPillWidget
+from .dark_title_bar import apply_dark_title_bar, create_minimal_app_icon
 
 
 class LogViewerDialog(QDialog):
     def __init__(self, slot_id: int, proc_mgr: ProcessManager, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Logs - Slot #{slot_id}")
+        self.setWindowIcon(create_minimal_app_icon())
+        apply_dark_title_bar(self)
         self.resize(560, 360)
         self.setStyleSheet("""
             QDialog {
@@ -65,6 +68,10 @@ class LogViewerDialog(QDialog):
         btn_close.clicked.connect(self.accept)
         btn_box.addWidget(btn_close)
         layout.addLayout(btn_box)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        apply_dark_title_bar(self)
 
 
 class SlotCard(QFrame):
