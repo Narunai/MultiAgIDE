@@ -26,6 +26,8 @@ class SlotState:
         self.ls_proc = None
         self.last_io_bytes: int = 0
         self.is_generating: bool = False
+        self.high_io_ticks: int = 0
+        self.low_io_ticks: int = 0
 
 
 class ProcessManager:
@@ -130,10 +132,22 @@ class ProcessManager:
             try:
                 io = state.ls_proc.io_counters()
                 total_io = io.read_bytes + io.write_bytes + io.other_bytes
-                if state.last_io_bytes > 0 and (total_io - state.last_io_bytes) > 2000:
-                    state.is_generating = True
-                else:
-                    state.is_generating = False
+                if state.last_io_bytes > 0:
+                    diff = total_io - state.last_io_bytes
+                    if diff > 15000:
+                        state.high_io_ticks = 2
+                        state.low_io_ticks = 0
+                    elif diff > 2000:
+                        state.high_io_ticks += 1
+                        state.low_io_ticks = 0
+                    else:
+                        state.high_io_ticks = 0
+                        state.low_io_ticks += 1
+                        
+                    if state.high_io_ticks >= 2:
+                        state.is_generating = True
+                    elif state.low_io_ticks >= 2:
+                        state.is_generating = False
                 state.last_io_bytes = total_io
             except Exception:
                 state.is_generating = False
