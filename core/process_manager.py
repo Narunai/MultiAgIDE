@@ -42,12 +42,21 @@ class ProcessManager:
         self.logger = ConversationLogger(self.profiles_dir)
         self.history_mgr = SlotHistoryManager(self.profiles_dir)
 
-        self.slots: Dict[int, SlotState] = {i: SlotState(i) for i in range(1, 7)}
+        slots_cfg = self.config_mgr.config.get("slots", [])
+        self.slots: Dict[int, SlotState] = {s["id"]: SlotState(s["id"]) for s in slots_cfg}
+        if not self.slots:
+            self.slots = {i: SlotState(i) for i in range(1, 13)}
         self._lock = threading.Lock()
         self.maximized_slot_id: Optional[int] = None
 
+    def ensure_slot(self, slot_id: int) -> SlotState:
+        with self._lock:
+            if slot_id not in self.slots:
+                self.slots[slot_id] = SlotState(slot_id)
+            return self.slots[slot_id]
+
     def get_slot_state(self, slot_id: int) -> SlotState:
-        return self.slots[slot_id]
+        return self.ensure_slot(slot_id)
 
     def _cleanup_slot_orphans(self, slot_id: int):
         """ทำความสะอาดโปรเซสลูกหลานหรือ helper ที่ค้างอยู่ของสล็อตนี้"""
@@ -225,13 +234,34 @@ class ProcessManager:
             
         return q, is_last_used, is_empty, is_cooldown_finished, False
 
+    def _handle_display1_swap(self, target_slot_id: int):
+        """
+        สำหรับ Account 7 เป็นต้นไป และ Slot 1 ซึ่งใช้ Display 1 ร่วมกัน:
+        เมื่อเปิดหรือแสดงสล็อตหนึ่ง ให้ซ่อน (Hide) สล็อตอื่นในกลุ่ม Display 1 เดียวกัน
+        เพื่อไม่ให้หน้าต่างทับซ้อนกัน และสลับกันเปิดปิดตามคำขอ
+        """
+        if target_slot_id != 1 and target_slot_id < 7:
+            return
+
+        display1_sids = [s_id for s_id in self.slots.keys() if s_id == 1 or s_id >= 7]
+        for sid in display1_sids:
+            if sid != target_slot_id:
+                state = self.slots.get(sid)
+                if state and state.ide_hwnd and not state.is_hidden:
+                    state.is_hidden = True
+                    self.win_ctrl.hide_window(state.ide_hwnd)
+
     def launch_slot(self, slot_id: int):
         """
         สั่งเปิด Antigravity IDE พร้อมผูก Workspace ประจำสล็อตอย่างถาวร
         ทำให้ประวัติการแชท (Chat History) ไม่สูญหายเมื่อปิดแล้วเปิดใหม่
         """
+        self.ensure_slot(slot_id)
         if self.is_running(slot_id):
             return
+
+        # สลับปิด/ซ่อนหน้าต่างอื่นที่แชร์ Display 1 เดียวกัน
+        self._handle_display1_swap(slot_id)
 
         cfg = self.config_mgr.config
         paths = self.config_mgr.get_slot_paths(slot_id)
@@ -259,13 +289,22 @@ class ProcessManager:
             threading.Thread(target=self._resolve_slot_after_launch, args=(slot_id,), daemon=True).start()
 
     def launch_all(self):
-        visible_slots = [s["id"] for s in self.config_mgr.get_visible_slots()]
-        for s_id in visible_slots:
+        # เลือกรันสล็อตหลักสำหรับหน้าจอ (Display 1 ถึง 6)
+        # สำหรับกลุ่ม Display 1 (Slot 1 และ Slot 7+) ให้เลือกรันเพียง 1 สล็อตที่กำลังทำงานอยู่หรือ Slot 1
+        active_d1 = 1
+        for s_id in self.slots.keys():
+            if (s_id == 1 or s_id >= 7) and self.is_running(s_id):
+                active_d1 = s_id
+                break
+
+        slots_to_run = [active_d1] + [s_id for s_id in range(2, 7) if s_id in self.slots]
+        for s_id in slots_to_run:
             self.launch_slot(s_id)
             time.sleep(0.5)
 
     def stop_slot(self, slot_id: int):
         """ปิด Antigravity IDE ในสล็อตนั้นโดยเฉพาะ"""
+        self.ensure_slot(slot_id)
         state = self.slots[slot_id]
         slot_tag = f"slot_{slot_id}"
 
@@ -309,10 +348,11 @@ class ProcessManager:
         state.quota_info = QuotaInfo()
 
     def stop_all(self):
-        for s_id in range(1, 7):
+        for s_id in list(self.slots.keys()):
             self.stop_slot(s_id)
 
     def _resolve_slot_after_launch(self, slot_id: int):
+        self.ensure_slot(slot_id)
         state = self.slots[slot_id]
         slot_tag = f"slot_{slot_id}"
         start_time = time.time()
@@ -342,6 +382,7 @@ class ProcessManager:
         self.apply_layout()
 
     def toggle_slot_visibility(self, slot_id: int) -> bool:
+        self.ensure_slot(slot_id)
         state = self.slots[slot_id]
         state.is_hidden = not state.is_hidden
 
@@ -351,6 +392,7 @@ class ProcessManager:
             if self.maximized_slot_id == slot_id:
                 self.maximized_slot_id = None
         else:
+            self._handle_display1_swap(slot_id)
             if state.ide_hwnd:
                 self.win_ctrl.show_window(state.ide_hwnd)
 

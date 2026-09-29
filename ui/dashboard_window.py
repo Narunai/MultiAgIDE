@@ -50,20 +50,30 @@ class DashboardWindow(QMainWindow):
         self.refresh_timer.start(1500)
 
     def init_geometry(self):
-        """ขนาดกะทัดรัด (กว้าง 360px, สูง 490px) มองเห็นครบ 6 สล็อตในจอเดียว 100%"""
+        """
+        คำนวณขนาด Control Deck ให้แสดงผลได้สูงสุดถึง 12 สล็อตในหน้าจอ
+        และหากมีจำนวนสล็อตมากกว่า 12 สล็อต ตัว ScrollArea จะเปิดให้เลื่อนดูได้อย่างราบรื่น
+        """
         screen = QApplication.primaryScreen()
         deck_w = 360
-        deck_h = 490
+        num_slots = len(self.config_mgr.config.get("slots", []))
+        visible_target_count = min(max(num_slots, 6), 12)
+        target_h = 100 + (visible_target_count * 67)
+
         if screen:
             geom = screen.availableGeometry()
+            max_h = geom.height() - 50
+            deck_h = min(target_h, max_h)
             deck_x = geom.x() + 30
             deck_y = geom.y() + 30
             self.setGeometry(deck_x, deck_y, deck_w, deck_h)
+            self.setMaximumHeight(min(100 + (12 * 67), geom.height() - 40))
         else:
+            deck_h = min(target_h, 904)
             self.resize(deck_w, deck_h)
 
         self.setFixedWidth(360)
-        self.setFixedHeight(490)
+        self.setMinimumHeight(400)
 
     def init_ui(self):
         central_widget = QWidget()
@@ -154,37 +164,45 @@ class DashboardWindow(QMainWindow):
         h_layout.addLayout(ctrl_row)
         root_layout.addWidget(header_card)
 
-        # 2. Slots Container (Zero-Scroll: fits all 6 slots in single view)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # 2. Slots Container (Scales up to 12 slots on screen, scrollable beyond)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        cards_container = QWidget()
-        cards_container.setObjectName("CardsContainer")
-        cards_layout = QVBoxLayout(cards_container)
-        cards_layout.setContentsMargins(0, 0, 0, 0)
-        cards_layout.setSpacing(3)
+        self.cards_container = QWidget()
+        self.cards_container.setObjectName("CardsContainer")
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.cards_layout.setSpacing(3)
 
         slots_data = self.config_mgr.config.get("slots", [])
-        for s_data in slots_data[:6]:
+        for s_data in slots_data:
             card = SlotCard(s_data, self.proc_mgr, self.config_mgr)
             card.layout_changed.connect(self.on_layout_or_status_changed)
-            cards_layout.addWidget(card)
+            card.slot_deleted.connect(self.on_slot_deleted)
+            self.cards_layout.addWidget(card)
             self.slot_cards.append(card)
 
-        scroll.setWidget(cards_container)
-        root_layout.addWidget(scroll, 1)
+        self.scroll.setWidget(self.cards_container)
+        root_layout.addWidget(self.scroll, 1)
 
         # 3. Minimal Footer
         footer = QHBoxLayout()
         footer.setContentsMargins(4, 0, 4, 0)
 
-        self.status_summary = QLabel("Active: 0/6 Slots")
+        self.status_summary = QLabel(f"Active: 0/{len(self.slot_cards)} Slots")
         self.status_summary.setStyleSheet("color: #71717a; font-size: 10px;")
         footer.addWidget(self.status_summary)
 
         footer.addStretch()
+
+        btn_add = QPushButton("+ Add Slot")
+        btn_add.setFixedHeight(16)
+        btn_add.setStyleSheet("font-size: 9px; padding: 0px 5px; font-weight: 600; color: #38bdf8; background-color: #18181b; border: 1px solid #27272a; border-radius: 3px;")
+        btn_add.setToolTip("Add new account slot")
+        btn_add.clicked.connect(self.on_add_slot_clicked)
+        footer.addWidget(btn_add)
 
         btn_profiles = QPushButton("Profiles")
         btn_profiles.setFixedHeight(16)
@@ -232,10 +250,53 @@ class DashboardWindow(QMainWindow):
             self.proc_mgr.stop_all()
             self.on_layout_or_status_changed()
 
+    def on_add_slot_clicked(self):
+        new_slot_data = self.config_mgr.add_slot()
+        new_id = new_slot_data["id"]
+        self.proc_mgr.ensure_slot(new_id)
+
+        card = SlotCard(new_slot_data, self.proc_mgr, self.config_mgr)
+        card.layout_changed.connect(self.on_layout_or_status_changed)
+        card.slot_deleted.connect(self.on_slot_deleted)
+        self.cards_layout.addWidget(card)
+        self.slot_cards.append(card)
+
+        self.adjust_window_height()
+        self.on_layout_or_status_changed()
+
+    def on_slot_deleted(self, slot_id: int):
+        target_card = None
+        for card in self.slot_cards:
+            if card.slot_id == slot_id:
+                target_card = card
+                break
+        if target_card:
+            self.cards_layout.removeWidget(target_card)
+            self.slot_cards.remove(target_card)
+            target_card.deleteLater()
+
+        self.adjust_window_height()
+        self.on_layout_or_status_changed()
+
+    def adjust_window_height(self):
+        screen = QApplication.primaryScreen()
+        num_slots = len(self.slot_cards)
+        visible_count = min(max(num_slots, 6), 12)
+        target_h = 100 + (visible_count * 67)
+        if screen:
+            geom = screen.availableGeometry()
+            max_h = geom.height() - 50
+            new_h = min(target_h, max_h)
+            self.setMaximumHeight(min(100 + (12 * 67), geom.height() - 40))
+            self.resize(self.width(), new_h)
+        else:
+            self.resize(self.width(), target_h)
+
     def apply_preset_count(self, count: int):
         self.proc_mgr.maximized_slot_id = None
-        for sid in range(1, 7):
-            state = self.proc_mgr.slots[sid]
+        for card in self.slot_cards:
+            sid = card.slot_id
+            state = self.proc_mgr.ensure_slot(sid)
             if sid <= count:
                 state.is_hidden = False
             else:
@@ -246,11 +307,12 @@ class DashboardWindow(QMainWindow):
         self.on_layout_or_status_changed()
 
     def _update_status_summary(self, running_count: int):
+        total_slots = len(self.slot_cards)
         running_sids = {c.slot_id for c in self.slot_cards if self.proc_mgr.is_running(c.slot_id)}
         last_sid = self.proc_mgr.history_mgr.get_last_used_slot_id()
         best_sid = self.proc_mgr.history_mgr.get_best_available_slot_id(running_sids)
 
-        parts = [f"Active: {running_count}/6"]
+        parts = [f"Active: {running_count}/{total_slots}"]
         if last_sid:
             rec_last = self.proc_mgr.history_mgr.get_record(last_sid)
             email_part = rec_last.email.split('@')[0] if '@' in rec_last.email else rec_last.email

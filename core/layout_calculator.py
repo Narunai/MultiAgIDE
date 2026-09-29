@@ -34,6 +34,11 @@ class LayoutCalculator:
         """
         คำนวณพิกัด (x, y, width, height) สำหรับสล็อต Antigravity IDE
         โดยเว้นพื้นที่ฝั่งขวาไว้สำหรับ Control Deck (reserve_deck_width)
+
+        กฎการจัดหน้าต่าง:
+        - หน้าจอรองรับการจัดวางหลักได้ 1 ถึง 6 สล็อต (Display 1 ถึง Display 6)
+        - สำหรับสล็อตตั้งแต่ Account 7 เป็นต้นไป (slot_id >= 7) จะใช้พิกัดตำแหน่งเดียวกับ Display 1 (Slot 1)
+          เพื่อให้สามารถสลับกันเปิดปิดใช้งานที่ตำแหน่งเดียวกันได้
         """
         if total_area is None:
             total_area = self.get_working_area()
@@ -44,31 +49,41 @@ class LayoutCalculator:
         aw = max(600, total_area["width"] - reserve_deck_width)
         ah = total_area["height"]
 
-        count = len(visible_slots)
-        results = {}
+        if not visible_slots:
+            return {}
 
-        if count == 0:
-            return results
+        # แยกสล็อตกลุ่ม Display 1 (Slot 1 และ Slot 7 เป็นต้นไป)
+        d1_slots = [s for s in visible_slots if s == 1 or s >= 7]
+        other_slots = [s for s in visible_slots if 2 <= s <= 6]
+
+        # สร้างรายการสล็อตจำลองเพื่อคำนวณตำแหน่ง Grid หลัก (1 ถึง 6)
+        primary_slots = []
+        if d1_slots:
+            primary_slots.append(1)
+        for s in sorted(other_slots):
+            primary_slots.append(s)
+
+        count = len(primary_slots)
+        base_rects = {}
 
         if count == 1:
             # 1 สล็อต: เต็มพื้นที่ฝั่ง IDE (3/4 จอ)
-            s_id = visible_slots[0]
-            results[s_id] = {"x": ax, "y": ay, "width": aw, "height": ah}
+            base_rects[primary_slots[0]] = {"x": ax, "y": ay, "width": aw, "height": ah}
 
         elif count == 2:
             # 2 สล็อต: แบ่งครึ่งซ้าย-ขวา 50% / 50%
             w = aw // 2
-            results[visible_slots[0]] = {"x": ax, "y": ay, "width": w, "height": ah}
-            results[visible_slots[1]] = {"x": ax + w, "y": ay, "width": aw - w, "height": ah}
+            base_rects[primary_slots[0]] = {"x": ax, "y": ay, "width": w, "height": ah}
+            base_rects[primary_slots[1]] = {"x": ax + w, "y": ay, "width": aw - w, "height": ah}
 
         elif count == 3:
             # 3 สล็อต: 3 คอลัมน์เท่ากัน
             w1 = aw // 3
             w2 = aw // 3
             w3 = aw - (w1 + w2)
-            results[visible_slots[0]] = {"x": ax, "y": ay, "width": w1, "height": ah}
-            results[visible_slots[1]] = {"x": ax + w1, "y": ay, "width": w2, "height": ah}
-            results[visible_slots[2]] = {"x": ax + w1 + w2, "y": ay, "width": w3, "height": ah}
+            base_rects[primary_slots[0]] = {"x": ax, "y": ay, "width": w1, "height": ah}
+            base_rects[primary_slots[1]] = {"x": ax + w1, "y": ay, "width": w2, "height": ah}
+            base_rects[primary_slots[2]] = {"x": ax + w1 + w2, "y": ay, "width": w3, "height": ah}
 
         elif count == 4:
             # 4 สล็อต: 2 แถว x 2 คอลัมน์ (Quad Grid 2x2)
@@ -77,10 +92,10 @@ class LayoutCalculator:
             h_top = ah // 2
             h_bottom = ah - h_top
 
-            results[visible_slots[0]] = {"x": ax, "y": ay, "width": w_left, "height": h_top}
-            results[visible_slots[1]] = {"x": ax + w_left, "y": ay, "width": w_right, "height": h_top}
-            results[visible_slots[2]] = {"x": ax, "y": ay + h_top, "width": w_left, "height": h_bottom}
-            results[visible_slots[3]] = {"x": ax + w_left, "y": ay + h_top, "width": w_right, "height": h_bottom}
+            base_rects[primary_slots[0]] = {"x": ax, "y": ay, "width": w_left, "height": h_top}
+            base_rects[primary_slots[1]] = {"x": ax + w_left, "y": ay, "width": w_right, "height": h_top}
+            base_rects[primary_slots[2]] = {"x": ax, "y": ay + h_top, "width": w_left, "height": h_bottom}
+            base_rects[primary_slots[3]] = {"x": ax + w_left, "y": ay + h_top, "width": w_right, "height": h_bottom}
 
         elif count == 5:
             # 5 สล็อต: 3 ช่องบน, 2 ช่องล่าง
@@ -91,11 +106,11 @@ class LayoutCalculator:
             w_bot = aw // 2
             w_bot_last = aw - w_bot
 
-            results[visible_slots[0]] = {"x": ax, "y": ay, "width": w_top, "height": h_top}
-            results[visible_slots[1]] = {"x": ax + w_top, "y": ay, "width": w_top, "height": h_top}
-            results[visible_slots[2]] = {"x": ax + (w_top * 2), "y": ay, "width": w_top_last, "height": h_top}
-            results[visible_slots[3]] = {"x": ax, "y": ay + h_top, "width": w_bot, "height": h_bottom}
-            results[visible_slots[4]] = {"x": ax + w_bot, "y": ay + h_top, "width": w_bot_last, "height": h_bottom}
+            base_rects[primary_slots[0]] = {"x": ax, "y": ay, "width": w_top, "height": h_top}
+            base_rects[primary_slots[1]] = {"x": ax + w_top, "y": ay, "width": w_top, "height": h_top}
+            base_rects[primary_slots[2]] = {"x": ax + (w_top * 2), "y": ay, "width": w_top_last, "height": h_top}
+            base_rects[primary_slots[3]] = {"x": ax, "y": ay + h_top, "width": w_bot, "height": h_bottom}
+            base_rects[primary_slots[4]] = {"x": ax + w_bot, "y": ay + h_top, "width": w_bot_last, "height": h_bottom}
 
         elif count >= 6:
             # 6 สล็อต: 2 แถว x 3 คอลัมน์ (2x3 Matrix Grid)
@@ -105,12 +120,23 @@ class LayoutCalculator:
             w_col2 = aw // 3
             w_col3 = aw - (w_col1 + w_col2)
 
-            slots_to_map = visible_slots[:6]
-            results[slots_to_map[0]] = {"x": ax, "y": ay, "width": w_col1, "height": h_top}
-            results[slots_to_map[1]] = {"x": ax + w_col1, "y": ay, "width": w_col2, "height": h_top}
-            results[slots_to_map[2]] = {"x": ax + w_col1 + w_col2, "y": ay, "width": w_col3, "height": h_top}
-            results[slots_to_map[3]] = {"x": ax, "y": ay + h_top, "width": w_col1, "height": h_bottom}
-            results[slots_to_map[4]] = {"x": ax + w_col1, "y": ay + h_top, "width": w_col2, "height": h_bottom}
-            results[slots_to_map[5]] = {"x": ax + w_col1 + w_col2, "y": ay + h_top, "width": w_col3, "height": h_bottom}
+            slots_to_map = primary_slots[:6]
+            base_rects[slots_to_map[0]] = {"x": ax, "y": ay, "width": w_col1, "height": h_top}
+            base_rects[slots_to_map[1]] = {"x": ax + w_col1, "y": ay, "width": w_col2, "height": h_top}
+            base_rects[slots_to_map[2]] = {"x": ax + w_col1 + w_col2, "y": ay, "width": w_col3, "height": h_top}
+            base_rects[slots_to_map[3]] = {"x": ax, "y": ay + h_top, "width": w_col1, "height": h_bottom}
+            base_rects[slots_to_map[4]] = {"x": ax + w_col1, "y": ay + h_top, "width": w_col2, "height": h_bottom}
+            base_rects[slots_to_map[5]] = {"x": ax + w_col1 + w_col2, "y": ay + h_top, "width": w_col3, "height": h_bottom}
+
+        results = {}
+        for s in other_slots:
+            if s in base_rects:
+                results[s] = base_rects[s]
+
+        d1_rect = base_rects.get(1)
+        if d1_rect:
+            for s in d1_slots:
+                results[s] = d1_rect
 
         return results
+

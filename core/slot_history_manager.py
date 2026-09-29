@@ -61,7 +61,7 @@ class SlotHistoryManager:
     """
     def __init__(self, profiles_dir: Path):
         self.history_file = profiles_dir / "slot_history.json"
-        self.records: Dict[int, SlotHistoryRecord] = {i: SlotHistoryRecord(i) for i in range(1, 7)}
+        self.records: Dict[int, SlotHistoryRecord] = {i: SlotHistoryRecord(i) for i in range(1, 13)}
         self._load()
 
     def _load(self):
@@ -71,8 +71,7 @@ class SlotHistoryManager:
                     data = json.load(f)
                     for sid_str, item in data.items():
                         sid = int(sid_str)
-                        if 1 <= sid <= 6:
-                            self.records[sid] = SlotHistoryRecord.from_dict(item)
+                        self.records[sid] = SlotHistoryRecord.from_dict(item)
             except Exception as e:
                 print(f"[SlotHistory] Error loading history: {e}")
         else:
@@ -106,7 +105,9 @@ class SlotHistoryManager:
             print(f"[SlotHistory] Error saving history: {e}")
 
     def get_record(self, slot_id: int) -> SlotHistoryRecord:
-        return self.records.get(slot_id, SlotHistoryRecord(slot_id))
+        if slot_id not in self.records:
+            self.records[slot_id] = SlotHistoryRecord(slot_id)
+        return self.records[slot_id]
 
     def record_launch(self, slot_id: int):
         rec = self.records[slot_id]

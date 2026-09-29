@@ -1,6 +1,6 @@
 import os
 from PySide6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QDialog, QTextEdit
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QDialog, QTextEdit, QMessageBox
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -76,6 +76,7 @@ class LogViewerDialog(QDialog):
 
 class SlotCard(QFrame):
     layout_changed = Signal()
+    slot_deleted = Signal(int)
 
     def __init__(self, slot_data: dict, proc_mgr: ProcessManager, config_mgr: ConfigManager, parent=None):
         super().__init__(parent)
@@ -94,13 +95,18 @@ class SlotCard(QFrame):
         main_layout.setContentsMargins(6, 4, 6, 4)
         main_layout.setSpacing(2)
 
-        # Line 1: #ID  Name  Status  [Start] [Max] [Hide] [Log]
+        # Line 1: #ID  Name  Status  [Start] [Max] [Hide] [Log] [X]
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
         top_row.setSpacing(4)
 
         self.id_label = QLabel(f"#{self.slot_id}")
-        self.id_label.setStyleSheet("font-weight: 800; color: #38bdf8; font-size: 11px;")
+        if self.slot_id >= 7:
+            self.id_label.setStyleSheet("font-weight: 800; color: #a78bfa; font-size: 11px;")
+            self.id_label.setToolTip(f"Slot #{self.slot_id} shares Display 1 with Slot #1 (Alternating)")
+        else:
+            self.id_label.setStyleSheet("font-weight: 800; color: #38bdf8; font-size: 11px;")
+            self.id_label.setToolTip(f"Slot #{self.slot_id} - Display {self.slot_id}")
         top_row.addWidget(self.id_label)
 
         self.name_edit = QLineEdit(self.slot_name)
@@ -136,6 +142,15 @@ class SlotCard(QFrame):
         self.btn_log.setFixedHeight(18)
         self.btn_log.clicked.connect(self.on_log_clicked)
         top_row.addWidget(self.btn_log)
+
+        if self.slot_id > 6:
+            self.btn_del = QPushButton("X")
+            self.btn_del.setFixedHeight(18)
+            self.btn_del.setFixedWidth(16)
+            self.btn_del.setStyleSheet("background-color: #27272a; color: #a1a1aa; font-size: 9px; border-radius: 3px; font-weight: bold;")
+            self.btn_del.setToolTip(f"Delete Slot #{self.slot_id}")
+            self.btn_del.clicked.connect(self.on_delete_clicked)
+            top_row.addWidget(self.btn_del)
 
         main_layout.addLayout(top_row)
 
@@ -185,6 +200,19 @@ class SlotCard(QFrame):
     def on_log_clicked(self):
         dialog = LogViewerDialog(self.slot_id, self.proc_mgr, self)
         dialog.exec()
+
+    def on_delete_clicked(self):
+        reply = QMessageBox.question(
+            self,
+            "Delete Slot",
+            f"Are you sure you want to remove Slot #{self.slot_id} ({self.name_edit.text()})?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            if self.proc_mgr.is_running(self.slot_id):
+                self.proc_mgr.stop_slot(self.slot_id)
+            self.config_mgr.delete_slot(self.slot_id)
+            self.slot_deleted.emit(self.slot_id)
 
     def update_status_display(self, force_stopped: bool = False, force_running: bool = False):
         if force_stopped:

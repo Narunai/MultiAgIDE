@@ -108,16 +108,14 @@ class FloatingDock(QWidget):
     def set_active_slots_count(self, count: int):
         """เปิด N สล็อตแรก ซ่อนสล็อตที่เหลือ"""
         self.proc_mgr.maximized_slot_id = None
-        for sid in range(1, 7):
-            state = self.proc_mgr.slots[sid]
+        for sid in list(self.proc_mgr.slots.keys()):
+            state = self.proc_mgr.ensure_slot(sid)
             if sid <= count:
                 state.is_hidden = False
             else:
                 state.is_hidden = True
                 if state.ide_hwnd:
                     self.proc_mgr.win_ctrl.hide_window(state.ide_hwnd)
-                if state.chrome_hwnd:
-                    self.proc_mgr.win_ctrl.hide_window(state.chrome_hwnd)
         self.proc_mgr.apply_layout()
         self.layout_changed.emit()
 

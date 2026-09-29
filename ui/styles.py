@@ -157,12 +157,38 @@ QLineEdit:focus {
     border-radius: 3px;
 }
 
-/* Scroll Area - Zero Scrollbar */
+/* Scroll Area - Sleek Minimal Dark Scrollbar */
 QScrollArea {
     background: transparent;
     border: none;
 }
-QScrollBar:vertical, QScrollBar:horizontal {
+
+QScrollBar:vertical {
+    background: #121214;
+    width: 6px;
+    margin: 0px;
+    border-radius: 3px;
+}
+
+QScrollBar::handle:vertical {
+    background: #27272a;
+    min-height: 24px;
+    border-radius: 3px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #3f3f46;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QScrollBar:horizontal {
     width: 0px;
     height: 0px;
 }

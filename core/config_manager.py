@@ -13,7 +13,7 @@ DEFAULT_CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 DEFAULT_CONFIG = {
     "ide_path": DEFAULT_IDE_PATH,
     "chrome_path": DEFAULT_CHROME_PATH,
-    "max_slots": 6,
+    "max_slots": 12,
     "active_layout": "matrix_6",
     "slots": [
         {"id": 1, "name": "Slot 1 (Main)", "visible": True, "notes": "Google Account #1"},
@@ -22,6 +22,12 @@ DEFAULT_CONFIG = {
         {"id": 4, "name": "Slot 4", "visible": True, "notes": "Google Account #4"},
         {"id": 5, "name": "Slot 5", "visible": True, "notes": "Google Account #5"},
         {"id": 6, "name": "Slot 6", "visible": True, "notes": "Google Account #6"},
+        {"id": 7, "name": "Slot 7", "visible": True, "notes": "Google Account #7 (Display 1 Alternate)"},
+        {"id": 8, "name": "Slot 8", "visible": True, "notes": "Google Account #8 (Display 1 Alternate)"},
+        {"id": 9, "name": "Slot 9", "visible": True, "notes": "Google Account #9 (Display 1 Alternate)"},
+        {"id": 10, "name": "Slot 10", "visible": True, "notes": "Google Account #10 (Display 1 Alternate)"},
+        {"id": 11, "name": "Slot 11", "visible": True, "notes": "Google Account #11 (Display 1 Alternate)"},
+        {"id": 12, "name": "Slot 12", "visible": True, "notes": "Google Account #12 (Display 1 Alternate)"},
     ]
 }
 
@@ -77,3 +83,28 @@ class ConfigManager:
 
     def get_visible_slots(self):
         return [s for s in self.config.get("slots", []) if s.get("visible", True)]
+
+    def add_slot(self, name: str = None, notes: str = None) -> dict:
+        slots = self.config.get("slots", [])
+        existing_ids = [s["id"] for s in slots]
+        new_id = max(existing_ids, default=0) + 1
+        note_str = notes or (f"Google Account #{new_id} (Display 1 Alternate)" if new_id >= 7 else f"Google Account #{new_id}")
+        new_slot = {
+            "id": new_id,
+            "name": name or f"Slot {new_id}",
+            "visible": True,
+            "notes": note_str
+        }
+        slots.append(new_slot)
+        self.config["slots"] = slots
+        self.config["max_slots"] = len(slots)
+        self.save_config()
+        self.ensure_profiles_dirs()
+        return new_slot
+
+    def delete_slot(self, slot_id: int) -> bool:
+        slots = self.config.get("slots", [])
+        self.config["slots"] = [s for s in slots if s["id"] != slot_id]
+        self.config["max_slots"] = len(self.config["slots"])
+        self.save_config()
+        return True
