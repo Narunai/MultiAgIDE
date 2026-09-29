@@ -29,8 +29,9 @@ class QuotaService:
 
     def fetch_slot_quota(self, slot_id: int, ide_root_pid: Optional[int] = None) -> QuotaInfo:
         """
-        ดึงข้อมูล Quota และ Token ของ Antigravity IDE ประจำสล็อตนั้นแบบ 1:1 Strict Matching
-        ไม่ยืมหรือใช้ข้อมูลข้ามสล็อตโดยเด็ดขาด
+        ดึงข้อมูล Quota และ Token ประจำสล็อตนั้นแบบ 100% Strict Isolation
+        - ห้ามจับโปรเซสของ Antigravity ทั่วไปในเครื่องเด็ดขาด
+        - ต้องเป็นโปรเซสที่ถูกเปิดขึ้นมาภายใต้สล็อตนี้เท่านั้น
         """
         info = self.cache.get(slot_id, QuotaInfo())
 
@@ -45,11 +46,13 @@ class QuotaService:
 
         if not ports:
             info.connected = False
+            info.email = "offline"
             return info
 
         user_status = self._query_user_status(ports, csrf_token)
         if not user_status:
             info.connected = False
+            info.email = "offline"
             return info
 
         self._parse_quota_data(info, user_status)
@@ -60,45 +63,68 @@ class QuotaService:
 
     def _find_language_server_for_slot(self, slot_id: int, ide_root_pid: Optional[int] = None) -> Optional[psutil.Process]:
         """
-        ค้นหาโปรเซส Language Server ที่เป็นของสล็อตนี้เท่านั้น (Strict Slot Association)
-        ตรวจสอบจาก tag 'slot_{slot_id}' ใน command line หรือใน parent processes
+        ค้นหา Language Server ที่สังกัดสล็อตนี้เท่านั้น (Strict Slot Matching)
+        กรองและตัด Antigravity ปกติของระบบออก 100%
         """
         target_tag = f"slot_{slot_id}"
 
-        # 1. ตรวจสอบจาก PID ลูกหลานของ IDE ที่เปิดโดยสล็อตนี้
+        # 1. ตรวจสอบจาก PID ลูกหลานของ IDE ที่สล็อตนี้เป็นคนสั่งเปิด
         if ide_root_pid and psutil.pid_exists(ide_root_pid):
             try:
                 parent = psutil.Process(ide_root_pid)
-                for child in parent.children(recursive=True):
-                    name = child.name().lower()
-                    if "language_server" in name:
-                        return child
+                # ตรวจสอบว่าโปรเซสต้นทางไม่ใช่ Antigravity ปกติ
+                p_cmd = " ".join(parent.cmdline() or []).lower()
+                if target_tag in p_cmd:
+                    for child in parent.children(recursive=True):
+                        if "language_server" in child.name().lower():
+                            return child
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
-        # 2. ตรวจสอบโปรเซส language_server ทุกตัวที่มี tag ของสล็อตนี้โดยตรง
+        # 2. ตรวจสอบโปรเซส language_server ทุกตัวในเครื่อง
         for p in psutil.process_iter(['pid', 'name']):
             try:
                 name = p.info['name'].lower()
-                if "language_server" in name:
-                    cmd_str = " ".join(p.cmdline() or []).lower()
-                    if target_tag in cmd_str:
-                        return p
+                if "language_server" not in name:
+                    continue
 
-                    # ตรวจสอบบรรพบุรุษ (Ancestors) ว่าเป็น IDE ของสล็อตนี้หรือไม่
-                    curr = p
-                    while curr and curr.ppid() != 0:
-                        parent = curr.parent()
-                        if not parent:
-                            break
-                        curr = parent
-                        p_cmd = " ".join(curr.cmdline() or []).lower()
-                        if target_tag in p_cmd:
-                            return p
+                cmd_str = " ".join(p.cmdline() or []).lower()
+
+                # กฎเหล็ก: ถ้าเป็น Antigravity ปกติของเครื่อง (AppData\Roaming\Antigravity IDE) ให้ข้ามทันที
+                if "appdata\\roaming\\antigravity" in cmd_str:
+                    continue
+
+                # ต้องมี tag 'slot_{slot_id}' ชัดเจนใน arguments
+                if target_tag in cmd_str:
+                    return p
+
+                # ตรวจสอบสายบรรพบุรุษ (Parent / Ancestors)
+                curr = p
+                has_slot_tag = False
+                is_system_ide = False
+
+                while curr and curr.ppid() != 0:
+                    parent = curr.parent()
+                    if not parent:
+                        break
+                    curr = parent
+                    parent_cmd = " ".join(curr.cmdline() or []).lower()
+
+                    if "appdata\\roaming\\antigravity" in parent_cmd:
+                        is_system_ide = True
+                        break
+
+                    if target_tag in parent_cmd:
+                        has_slot_tag = True
+                        break
+
+                if has_slot_tag and not is_system_ide:
+                    return p
+
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 
-        # ไม่พบ Language Server ของสล็อตนี้ (ห้าม Fallback สุ่มเด็ดขาด)
+        # ไม่ใช่โปรเซสของสล็อตนี้ -> คืนค่า None เสมอ (ห้ามสุ่มหรือเดาเด็ดขาด)
         return None
 
     def _extract_csrf_token(self, proc: psutil.Process) -> Optional[str]:

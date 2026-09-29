@@ -190,8 +190,8 @@ class SlotCard(QFrame):
             self.status_badge.setObjectName("BadgeStopped")
             self.btn_toggle_run.setText("Start")
             self.btn_toggle_run.setProperty("class", "SuccessBtn")
-            state = self.proc_mgr.get_slot_state(self.slot_id)
-            self.quota_pill.update_quota(state.quota_info)
+            # When STOPPED, always show offline quota (never display another user or cached data)
+            self.quota_pill.update_quota(QuotaInfo())
 
         self.status_badge.style().polish(self.status_badge)
         self.btn_toggle_run.style().polish(self.btn_toggle_run)
