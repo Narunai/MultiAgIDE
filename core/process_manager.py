@@ -419,6 +419,40 @@ class ProcessManager:
         self.apply_layout()
         return not state.is_hidden
 
+    def bring_slot_to_front(self, slot_id: int) -> bool:
+        """
+        เรียกหน้าต่างงานของสล็อตนั้นขึ้นมาด้านหน้าสุด (Unhide + Restore + Bring to Top)
+        พร้อมสลับกลุ่ม Display 1 อัตโนมัติหากเป็นสล็อต 1 หรือสล็อต 7+
+        """
+        self.ensure_slot(slot_id)
+        if not self.is_running(slot_id):
+            return False
+
+        state = self.slots[slot_id]
+
+        # 1. สลับกลุ่ม Display 1
+        self._handle_display1_swap(slot_id)
+
+        # 2. ถ้ายกเลิกซ่อน (Unhide)
+        if state.is_hidden:
+            state.is_hidden = False
+            if state.ide_hwnd:
+                self.win_ctrl.show_window(state.ide_hwnd)
+
+        # 3. ถ้าไม่มี HWND หรือ HWND หลุด ให้ลองค้นหาใหม่อีกครั้ง
+        if not state.ide_hwnd or not self.win_ctrl.is_window_alive(state.ide_hwnd):
+            if state.ide_pid:
+                pids = self.win_ctrl.get_descendant_pids(state.ide_pid)
+                state.ide_hwnd = self.win_ctrl.find_window_by_pids(pids)
+
+        # 4. แสดงและดึงหน้าต่างมาข้างหน้าสุด
+        if state.ide_hwnd:
+            self.win_ctrl.show_window(state.ide_hwnd)
+            self.win_ctrl.bring_to_front(state.ide_hwnd)
+            self.apply_layout()
+            return True
+        return False
+
     def toggle_slot_maximize(self, slot_id: int) -> bool:
         if self.maximized_slot_id == slot_id:
             self.maximized_slot_id = None

@@ -87,8 +87,31 @@ class SlotCard(QFrame):
 
         self.setObjectName("SlotCard")
         self.setFixedHeight(64)
+        self.setCursor(Qt.PointingHandCursor)
         self.init_ui()
         self.update_status_display()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.on_focus_slot()
+        super().mousePressEvent(event)
+
+    def on_id_label_clicked(self, event):
+        if event.button() == Qt.LeftButton:
+            self.on_focus_slot()
+
+    def on_focus_slot(self):
+        """
+        เรียกหน้าต่างงานของสล็อตนั้นขึ้นมาด้านหน้าสุด (ตามคำขอของผู้ใช้: กดที่ตัวเลขหรือการ์ดเพื่อเรียกแท็บงานออกมา)
+        """
+        if self.proc_mgr.is_running(self.slot_id):
+            self.proc_mgr.bring_slot_to_front(self.slot_id)
+            self.update_status_display()
+            self.layout_changed.emit()
+        else:
+            self.proc_mgr.launch_slot(self.slot_id)
+            self.update_status_display(force_running=True)
+            self.layout_changed.emit()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -101,12 +124,14 @@ class SlotCard(QFrame):
         top_row.setSpacing(4)
 
         self.id_label = QLabel(f"#{self.slot_id}")
+        self.id_label.setCursor(Qt.PointingHandCursor)
         if self.slot_id >= 7:
-            self.id_label.setStyleSheet("font-weight: 800; color: #a78bfa; font-size: 11px;")
-            self.id_label.setToolTip(f"Slot #{self.slot_id} shares Display 1 with Slot #1 (Alternating)")
+            self.id_label.setStyleSheet("font-weight: 800; color: #a78bfa; font-size: 11px; padding: 1px 3px; border-radius: 3px;")
+            self.id_label.setToolTip(f"คลิก #{self.slot_id} เพื่อเรียกหน้าต่างงานออกมา (แชร์ Display 1)")
         else:
-            self.id_label.setStyleSheet("font-weight: 800; color: #38bdf8; font-size: 11px;")
-            self.id_label.setToolTip(f"Slot #{self.slot_id} - Display {self.slot_id}")
+            self.id_label.setStyleSheet("font-weight: 800; color: #38bdf8; font-size: 11px; padding: 1px 3px; border-radius: 3px;")
+            self.id_label.setToolTip(f"คลิก #{self.slot_id} เพื่อเรียกหน้าต่างงานออกมาด้านหน้า (Display {self.slot_id})")
+        self.id_label.mousePressEvent = self.on_id_label_clicked
         top_row.addWidget(self.id_label)
 
         self.name_edit = QLineEdit(self.slot_name)

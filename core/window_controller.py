@@ -115,7 +115,20 @@ class WindowController:
         """ดึงหน้าต่างมาแสดงข้างหน้าสุด (Foreground)"""
         if win32gui.IsWindow(hwnd):
             try:
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                if not win32gui.IsWindowVisible(hwnd):
+                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+
+                placement = win32gui.GetWindowPlacement(hwnd)
+                if placement[1] == win32con.SW_SHOWMINIMIZED:
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                else:
+                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+
+                win32gui.BringWindowToTop(hwnd)
+                win32gui.SetWindowPos(
+                    hwnd, win32con.HWND_TOP, 0, 0, 0, 0,
+                    win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW
+                )
                 win32gui.SetForegroundWindow(hwnd)
                 return True
             except Exception:

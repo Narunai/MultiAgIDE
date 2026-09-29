@@ -11,10 +11,12 @@ from core.config_manager import ConfigManager
 from core.layout_calculator import LayoutCalculator
 from core.window_controller import WindowController
 from core.process_manager import ProcessManager
+from core.package_manager import PackageManager
 
 from .styles import DARK_THEME_QSS
 from .slot_card import SlotCard
 from .dark_title_bar import apply_dark_title_bar, create_minimal_app_icon
+from .package_dialogs import ExportDialog, ImportDialog
 
 
 class DashboardWindow(QMainWindow):
@@ -242,6 +244,20 @@ class DashboardWindow(QMainWindow):
         btn_add.clicked.connect(self.on_add_slot_clicked)
         footer.addWidget(btn_add)
 
+        btn_export = QPushButton("Export")
+        btn_export.setFixedHeight(16)
+        btn_export.setStyleSheet("font-size: 9px; padding: 0px 4px; font-weight: 600; color: #a78bfa; background-color: #18181b; border: 1px solid #27272a; border-radius: 3px;")
+        btn_export.setToolTip("Export all profiles, auth tokens, and projects to a portable package")
+        btn_export.clicked.connect(self.on_export_clicked)
+        footer.addWidget(btn_export)
+
+        btn_import = QPushButton("Import")
+        btn_import.setFixedHeight(16)
+        btn_import.setStyleSheet("font-size: 9px; padding: 0px 4px; font-weight: 600; color: #10b981; background-color: #18181b; border: 1px solid #27272a; border-radius: 3px;")
+        btn_import.setToolTip("Import and restore a portable package onto this machine")
+        btn_import.clicked.connect(self.on_import_clicked)
+        footer.addWidget(btn_import)
+
         btn_profiles = QPushButton("Profiles")
         btn_profiles.setFixedHeight(16)
         btn_profiles.setStyleSheet("font-size: 9px; padding: 0px 4px;")
@@ -312,6 +328,45 @@ class DashboardWindow(QMainWindow):
             self.cards_layout.removeWidget(target_card)
             self.slot_cards.remove(target_card)
             target_card.deleteLater()
+
+        self.adjust_window_height()
+        self.on_layout_or_status_changed()
+
+    def on_export_clicked(self):
+        pkg_mgr = PackageManager(self.config_mgr.BASE_DIR)
+        dialog = ExportDialog(pkg_mgr, self)
+        dialog.exec()
+
+    def on_import_clicked(self):
+        pkg_mgr = PackageManager(self.config_mgr.BASE_DIR)
+        dialog = ImportDialog(pkg_mgr, self)
+        dialog.import_completed.connect(self.on_import_completed)
+        dialog.exec()
+
+    def on_import_completed(self, result: dict):
+        self.reload_all_slots()
+
+    def reload_all_slots(self):
+        """โหลดรายการสล็อตทั้งหมดใหม่หลังการนำเข้า (Import) หรือการเปลี่ยนแปลงโครงสร้าง"""
+        self.config_mgr.config = self.config_mgr.load_config()
+        self.config_mgr.ensure_profiles_dirs()
+
+        # นำการ์ดเดิมออก
+        for card in list(self.slot_cards):
+            self.cards_layout.removeWidget(card)
+            card.deleteLater()
+        self.slot_cards.clear()
+
+        # สร้างการ์ดใหม่ตามข้อมูลล่าสุด
+        slots_data = self.config_mgr.config.get("slots", [])
+        for s_data in slots_data:
+            sid = s_data["id"]
+            self.proc_mgr.ensure_slot(sid)
+            card = SlotCard(s_data, self.proc_mgr, self.config_mgr)
+            card.layout_changed.connect(self.on_layout_or_status_changed)
+            card.slot_deleted.connect(self.on_slot_deleted)
+            self.cards_layout.addWidget(card)
+            self.slot_cards.append(card)
 
         self.adjust_window_height()
         self.on_layout_or_status_changed()

@@ -7,8 +7,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 PROFILES_DIR = BASE_DIR / "profiles"
 CONFIG_FILE = BASE_DIR / "config.json"
 
-DEFAULT_IDE_PATH = r"C:\Users\COMPUTER\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe"
-DEFAULT_CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+def find_default_ide_path() -> str:
+    local_app = os.environ.get("LOCALAPPDATA", "")
+    candidates = [
+        os.path.join(local_app, "Programs", "Antigravity IDE", "Antigravity IDE.exe"),
+        r"C:\Program Files\Antigravity IDE\Antigravity IDE.exe",
+        r"C:\Program Files (x86)\Antigravity IDE\Antigravity IDE.exe",
+        r"C:\Users\COMPUTER\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe",
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+def find_default_chrome_path() -> str:
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Google\Chrome\Application\chrome.exe"),
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+DEFAULT_IDE_PATH = find_default_ide_path()
+DEFAULT_CHROME_PATH = find_default_chrome_path()
 
 DEFAULT_CONFIG = {
     "ide_path": DEFAULT_IDE_PATH,
@@ -33,6 +59,9 @@ DEFAULT_CONFIG = {
 
 
 class ConfigManager:
+    BASE_DIR = BASE_DIR
+    PROFILES_DIR = PROFILES_DIR
+
     def __init__(self):
         self.config = self.load_config()
         self.ensure_profiles_dirs()
@@ -47,6 +76,20 @@ class ConfigManager:
                 for k, v in DEFAULT_CONFIG.items():
                     if k not in loaded:
                         loaded[k] = v
+
+                # ตรวจสอบว่า ide_path ใน config ยังมีอยู่จริงหรือไม่ (เช่น ย้ายเครื่องใหม่)
+                if not os.path.exists(loaded.get("ide_path", "")):
+                    detected_ide = find_default_ide_path()
+                    if os.path.exists(detected_ide):
+                        loaded["ide_path"] = detected_ide
+                        self.save_config(loaded)
+
+                if not os.path.exists(loaded.get("chrome_path", "")):
+                    detected_chrome = find_default_chrome_path()
+                    if os.path.exists(detected_chrome):
+                        loaded["chrome_path"] = detected_chrome
+                        self.save_config(loaded)
+
                 return loaded
         except Exception:
             return dict(DEFAULT_CONFIG)

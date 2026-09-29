@@ -1,4 +1,5 @@
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
+from PySide6.QtCore import Qt
 from core.quota_service import QuotaInfo
 
 
@@ -11,7 +12,11 @@ class QuotaPillWidget(QFrame):
         super().__init__(parent)
         self.setObjectName("QuotaPill")
         self.setFixedHeight(30)
+        self.setCursor(Qt.PointingHandCursor)
         self.init_ui()
+
+    def mousePressEvent(self, event):
+        event.ignore()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)

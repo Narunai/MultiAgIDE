@@ -1,75 +1,95 @@
 # MultiAgIDE Studio
 
-**Multi-Account Antigravity IDE & Google Chrome Workspace Orchestrator**  
-โปรแกรมบริหารจัดการและจัดระเบียบหน้าจอสำหรับ **Antigravity IDE** และ **Google Chrome** รองรับสูงสุด 6 บัญชี Google พร้อมกัน โดยแยก Profile, Session และสภาพแวดล้อม (Environment) จากกันอย่างเด็ดขาด
+**Multi-Account Antigravity IDE Workspace Orchestrator**  
+ระบบบริหารจัดการ จัดสรรหน้าจอ และควบคุมหลายบัญชี Google สำหรับ **Antigravity IDE** รองรับตั้งแต่ 1 ถึง 12+ บัญชี พร้อมระบบแยก Profile, Auth Tokens, Sessions, และ Workspaces อย่างเด็ดขาด พร้อมความสามารถในการส่งออก (Export) และนำเข้า (Import) เพื่อย้ายเครื่องทำงานได้ทันที 100%
 
 ---
 
-## 🚀 คุณสมบัติเด่น (Key Features)
+## Key Features
 
 1. **ระบบแยกบัญชี Google 100% (Isolated Multi-User Profiles):**
-   - รองรับสูงสุด 6 บัญชี (Slot 1 ถึง Slot 6)
-   - แต่ละสล็อตจะมี Antigravity IDE 1 ตัว และ Google Chrome 1 หน้าต่าง
-   - แยก Session, Cache, Login Token อิสระถาวร ล็อกอินบัญชี Google ครั้งเดียว ระบบจะจำสถานะไว้ตลอดไป ไม่ต้องตั้งค่าใหม่
+   - รองรับบัญชีไม่จำกัด (เริ่มต้น 12 สล็อต และกด `+ Add Slot` ได้ต่อเนื่อง)
+   - แยก User Data Directory, Session, Google OAuth Tokens, State Cache และ History ของแต่ละสล็อตออกจากกันเด็ดขาด
+   - ปลอดภัยจากระบบหลัก: แยกขาดจาก Antigravity ปกติของเครื่อง (`AppData\Roaming\Antigravity IDE`) 100%
 
-2. **ระบบจัดหน้าจอไดนามิกอัตโนมัติ (Dynamic Grid & Auto-Tiling):**
-   - คำนวณขนาดและพิกัดหน้าจอแบบเรียลไทม์ (หัก Taskbar ออกอัตโนมัติ)
-   - พรีเซ็ต 1 คลิก:
-     - **1 จอ (Focus):** ขยายเต็มหน้าจอ 100%
-     - **2 จอ (Split 50/50):** แบ่งครึ่งซ้าย-ขวา
-     - **3 จอ (Trio Columns):** แบ่ง 3 คอลัมน์เท่ากัน
-     - **4 จอ (Quad 2x2):** แบ่ง 4 ช่อง 4 มุม
-     - **6 จอ (Matrix 2x3):** แสดงผล 6 สล็อตพร้อมกันเต็มหน้าจอ
-   - **ปุ่ม Snap All:** ดึงหน้าต่างที่เคลื่อนย้ายกลับเข้าพิกัด Grid สวยงามในคลิกเดียว
+2. **ระบบสลับหน้าจอ Display 1 สำหรับสล็อต 7 เป็นต้นไป (Display 1 Alternating Slots):**
+   - สล็อต 1 ถึง 6 กระจายตามตำแหน่ง Display 1 ถึง 6 บนหน้าจอ
+   - สล็อตที่ 7 เป็นต้นไป (สล็อต 7, 8, 9, 10, ...) จะแชร์พิกัดหน้าจอกับ Display 1 (สล็อต 1) อัตโนมัติ โดยระบบจะสลับเปิด/ซ่อนให้อัตโนมัติเพื่อไม่ให้หน้าต่างบดบังทับซ้อนกัน
 
-3. **การควบคุมรายสล็อต (Per-Slot Controls):**
-   - **🔍 ปุ่มเต็มจอ (Maximize):** ขยายเฉพาะสล็อตที่เลือกให้เต็มจอ 100% และคลิกซ้ำเพื่อคืนสู่ Grid เดิม
-   - **👁️ ปุ่มซ่อน/แสดง (Hide/Show):** เมื่อสั่งซ่อนสล็อตใด สล็อตที่เหลือจะคำนวณพื้นที่และขยายตัวเติมเต็มหน้าจออัตโนมัติ (Responsive Rearranging)
-   - **⚡ สลับ IDE / Chrome (Quick Switch):** สลับหน้าต่างที่อยู่ด้านหน้าขึ้นมาทันที
-   - **📂 เปิดโฟลเดอร์:** เปิดไดเรกทอรีจัดเก็บข้อมูลของโปรไฟล์นั้นใน Windows Explorer
+3. **คลิกเรียกหน้าต่างงานขึ้นมาด้านหน้าสุดทันที (Click-to-Bring-Forward):**
+   - คลิกที่หมายเลขสล็อต (`#1`, `#2`, `#3`...) หรือคลิกบนการ์ด เพื่อดึงหน้าต่าง Antigravity IDE ของสล็อตนั้นขึ้นมาด้านหน้าสุด (Unhide + Restore + Foreground) ทันทีโดยไม่ต้องคอยเล็งปุ่ม Res หรือ Max
+   - หากสล็อตนั้นปิดอยู่ การคลิกจะสั่งเปิดสล็อตและผูก Workspace ให้อัตโนมัติ
 
-4. **โหมดแถบลอยตัว (Mini Floating Dock):**
-   - ย่อหน้าต่างคอนโซลหลักเป็นแถบเล็กๆ ติดไว้ที่ขอบบนหน้าจอ (Always-On-Top) เพื่อไม่ให้บดบังพื้นที่เขียนโค้ด
+4. **ระบบ Export / Import Package สมบูรณ์แบบ (Portable Migration Engine):**
+   - **Export Package (`.zip` / `.magpkg`):** รวมทุกสล็อต, บัญชี Google, Auth Tokens, ส่วนขยาย, ประวัติแชท, และโฟลเดอร์โปรเจกต์งานทั้งหมดออกมาเป็นไฟล์แพ็กเกจเดียว
+   - **Auto-Path Remapping:** เมื่อนำเข้า (Import) บนเครื่องใหม่ ระบบจะแปลง Path เดิม (เช่น `D:\...` ไปเป็น `C:\...`) ทั้งใน `storage.json`, `workspaceStorage`, `state.vscdb` (SQLite) และ `config.json` ให้อัตโนมัติ 100%
+   - **Auto-Detect Local IDE:** ค้นหาไฟล์ `Antigravity IDE.exe` บนเครื่องใหม่ตามโฟลเดอร์ AppData หรือ Program Files อัตโนมัติ ทำให้กดใช้งานได้ทันทีโดยไม่ต้องล็อกอินใหม่
 
----
+5. **ระบบนับถอยหลัง Cooldown 5 ชั่วโมงตามเวลาจริง (Real-Time Cooldown Countdown):**
+   - เมื่อปิดโปรแกรมหรือล็อกอินกลับมา เวลา Cooldown จะหักลบตามเวลาจริงของนาฬิการะบบ
+   - มีระบบแจ้งเตือนแบนเนอร์และ Windows Toast Notification: *"อีเมลนี้พร้อมใช้งานอีกครั้ง"* เมื่อเวลาครบ
 
-## 🛠️ วิธีการเปิดใช้งาน (How to Run)
-
-### วิธีที่ 1: ดับเบิ้ลคลิกจาก Desktop Shortcut
-- บนเดสก์ท็อปของคุณจะมีไอคอน **`MultiAgIDE Studio`** ดับเบิ้ลคลิกเพื่อเปิดโปรแกรมได้ทันที
-
-### วิธีที่ 2: รันผ่านไฟล์ `launch.bat`
-- เข้าไปที่โฟลเดอร์ `d:\ProJectNextLevel\MutiAgIDE`
-- ดับเบิ้ลคลิกไฟล์ `launch.bat`
-
-### วิธีที่ 3: รันผ่าน Terminal / PowerShell
-```powershell
-cd d:\ProJectNextLevel\MutiAgIDE
-python main.py
-```
+6. **Ultra-Minimal Modern Dark Theme:**
+   - ดีไซน์ Dark-Gray (#121214 / #18181b), Typography คมชัด, นโยบาย Zero-Emoji / Zero-Icon
+   - DWM Immersive Dark Title Bar กลมกลืนกับระบบปฏิบัติการ Windows 11 / 10
 
 ---
 
-## 📂 โครงสร้างไดเรกทอรีโปรเจกต์
+## วิธีการเปิดใช้งาน (How to Run)
+
+### 1. เปิดโปรแกรม Dashboard
+- ดับเบิ้ลคลิกไฟล์ `launch.bat` หรือรัน:
+  ```powershell
+  python main.py
+  ```
+
+### 2. ส่งออกแพ็กเกจเพื่อย้ายเครื่อง (Export Package)
+- **ผ่านหน้า Dashboard:** กดปุ่ม **Export** ที่มุมขวาล่าง เลือกระบุสล็อตและปลายทางไฟล์ `.zip`
+- **ผ่านไฟล์ Batch:** ดับเบิ้ลคลิก `export.bat` หรือรัน:
+  ```powershell
+  python export_package.py
+  ```
+
+### 3. นำเข้าแพ็กเกจบนเครื่องใหม่ (Import Package)
+- **ผ่านหน้า Dashboard:** กดปุ่ม **Import** ที่มุมขวาล่าง เลือกไฟล์ `.zip` หรือ `.magpkg` แล้วกด **Start Import**
+- **ผ่านไฟล์ Batch:** ดับเบิ้ลคลิก `import.bat` หรือรัน:
+  ```powershell
+  python import_package.py "path\to\package.zip"
+  ```
+- เมื่อนำเข้าเสร็จ สล็อตและโปรเจกต์ทั้งหมดจะพร้อมใช้งานทันที
+
+---
+
+## โครงสร้างโปรเจกต์ (Project Structure)
 
 ```
-d:\ProJectNextLevel\MutiAgIDE\
+MutiAgIDE/
 ├── core/
-│   ├── config_manager.py       # จัดการคอนฟิก Path และ Profiles
-│   ├── layout_calculator.py    # คำนวณพิกัด Grid หน้าจอ 1-6 จอ
-│   ├── window_controller.py    # Win32 API Engine สำหรับย้าย/ปรับขนาด/ซ่อนหน้าต่าง
-│   └── process_manager.py      # สั่งเปิด/ปิด และจับคู่ HWND
+│   ├── config_manager.py       # จัดการคอนฟิก Path และการเพิ่ม/ลบสล็อต
+│   ├── layout_calculator.py    # คำนวณพิกัด Grid หน้าจอ และ Display 1 สำหรับสล็อต 7+
+│   ├── window_controller.py    # Win32 API Engine (ควบคุมพิกัด, Unhide, Bring to front)
+│   ├── process_manager.py      # สั่งเปิด/ปิด, ตรวจจับ HWND, และ Real-time Cooldown
+│   ├── package_manager.py      # ระบบ Export/Import และ Auto-Path Remapping ข้ามเครื่อง
+│   ├── quota_service.py        # ดึงโควตา Gemini และ Reset Time จาก Language Server
+│   └── slot_history_manager.py # บันทึกประวัติสล็อตและเวลา Cooldown ตามเวลาจริง
 ├── ui/
-│   ├── styles.py               # Dark Glassmorphic Theme (QSS)
-│   ├── slot_card.py            # การ์ดควบคุมสล็อต 1 ถึง 6
-│   ├── floating_dock.py        # แถบควบคุมขนาดกะทัดรัด (Mini Dock)
-│   └── dashboard_window.py     # หน้าต่างแดชบอร์ดหลัก
-├── profiles/                   # ข้อมูลเซสชันของแต่ละบัญชี
-│   ├── slot_1/ { ide/, chrome/ }
+│   ├── styles.py               # Minimalist Dark-Gray Theme (Zero Emoji)
+│   ├── dark_title_bar.py       # Windows DWM Immersive Dark Title Bar API
+│   ├── slot_card.py            # การ์ดสล็อต (รองรับการคลิกหมายเลขเพื่อดึงหน้าต่างขึ้นหน้าสุด)
+│   ├── quota_pill.py           # แถบแสดงโควตาเรียบแบน
+│   ├── package_dialogs.py      # หน้าต่าง Export / Import Package
+│   └── dashboard_window.py     # หน้าต่างแดชบอร์ดหลัก ปรับความสูงไดนามิกตามสล็อต
+├── profiles/                   # โปรไฟล์แยกอิสระ 100%
+│   ├── slot_1/ { ide/, workspace/, logs/ }
 │   ├── ...
-│   └── slot_6/ { ide/, chrome/ }
-├── config.json                 # ไฟล์บันทึกการตั้งค่า
-├── launch.bat                  # ตัวเปิดโปรแกรมคลิกเดียว
+│   ├── slot_12/ { ide/, workspace/, logs/ }
+│   └── slot_history.json       # ประวัติและโควตาล่าสุด
+├── config.json                 # การตั้งค่าสล็อตและพิกัดเลย์เอาต์
+├── launch.bat                  # ตัวเปิดโปรแกรม Dashboard
+├── export.bat                  # ตัวส่งออกแพ็กเกจคลิกเดียว
+├── import.bat                  # ตัวนำเข้าแพ็กเกจคลิกเดียว
+├── export_package.py           # สคริปต์ส่งออกแพ็กเกจแบบ CLI
+├── import_package.py           # สคริปต์นำเข้าแพ็กเกจแบบ CLI
 ├── main.py                     # Entry point
 └── README.md                   # เอกสารประกอบการใช้งาน
 ```
