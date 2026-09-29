@@ -1,12 +1,22 @@
 @echo off
-title MultiAgIDE Studio Launcher
-cd /d "%~dp0"
+title MultiAgIDE Control Deck
+setlocal
+
+:: ตรวจสอบตำแหน่งโฟลเดอร์ของโปรเจกต์
+if exist "%~dp0main.py" (
+    cd /d "%~dp0"
+) else (
+    cd /d "d:\ProJectNextLevel\MutiAgIDE"
+)
+
 echo ========================================================
-echo   Launching MultiAgIDE Studio (Multi-Account Workspace)
+echo   Launching MultiAgIDE Control Deck
+echo   Directory: %CD%
 echo ========================================================
+
 python main.py
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo An error occurred during execution.
+    echo [Error] MultiAgIDE encountered an issue.
     pause
 )
