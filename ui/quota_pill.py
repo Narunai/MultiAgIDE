@@ -71,7 +71,7 @@ class QuotaPillWidget(QFrame):
             email_short = q.email.split("@")[0] if "@" in q.email else q.email
             self.lbl_account.setText(email_short)
             self.lbl_account.setStyleSheet("color: #a1a1aa; font-size: 9px;")
-            self.setToolTip(f"อีเมล: {q.email}\nแพ็กเกจ: {q.plan}\nGemini Quota: {q.gemini_pct}%\nรีเซ็ต 5 ชม.: {q.reset_5h_str}")
+            self.setToolTip(f"อีเมล: {q.email}\nแพ็กเกจ: {q.plan}\nGemini Weekly: {q.gemini_pct}% (รีเซ็ต: {q.weekly_str})\nRolling 5H: {q.rolling_5h_pct}% (รีเซ็ต: {q.reset_5h_str})")
         else:
             self.lbl_g.setText("<b style='color: #52525b;'>G:</b> <span style='color: #71717a;'>--%</span>")
             self.lbl_5h.setText("<b style='color: #52525b;'>5H:</b> <span style='color: #71717a;'>--%</span>")

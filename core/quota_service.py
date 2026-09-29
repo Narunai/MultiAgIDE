@@ -3,7 +3,7 @@ import json
 import ssl
 import time
 import urllib.request
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import psutil
 
 
@@ -15,7 +15,9 @@ class QuotaInfo:
         self.gemini_pct: int = 100
         self.rolling_5h_pct: int = 100
         self.reset_5h_str: str = "--"
-        self.weekly_str: str = "7d 00h"
+        self.weekly_str: str = "--"
+        self.third_party_weekly_pct: int = 100
+        self.third_party_5h_pct: int = 100
         self.is_exhausted: bool = False
         self.last_updated: float = 0
 
@@ -49,13 +51,13 @@ class QuotaService:
             info.email = "offline"
             return info
 
-        user_status = self._query_user_status(ports, csrf_token)
-        if not user_status:
+        user_status, quota_summary = self._query_server_data(ports, csrf_token)
+        if not user_status and not quota_summary:
             info.connected = False
             info.email = "offline"
             return info
 
-        self._parse_quota_data(info, user_status)
+        self._parse_quota_data(info, user_status, quota_summary)
         info.connected = True
         info.last_updated = time.time()
         self.cache[slot_id] = info
@@ -147,9 +149,11 @@ class QuotaService:
             pass
         return ports
 
-    def _query_user_status(self, ports: List[int], csrf_token: Optional[str]) -> Optional[dict]:
-        endpoint = "/exa.language_server_pb.LanguageServerService/GetUserStatus"
-        payload = json.dumps({
+    def _query_server_data(self, ports: List[int], csrf_token: Optional[str]) -> Tuple[Optional[dict], Optional[dict]]:
+        """
+        เรียก Connect RPC API บน localhost เพื่อดึงข้อมูล UserStatus และ RetrieveUserQuotaSummary
+        """
+        status_payload = json.dumps({
             "metadata": {
                 "ideName": "antigravity",
                 "extensionName": "antigravity",
@@ -166,66 +170,152 @@ class QuotaService:
 
         for proto in ["https", "http"]:
             for port in ports:
-                url = f"{proto}://127.0.0.1:{port}{endpoint}"
-                req = urllib.request.Request(url, data=payload, headers=headers)
+                ctx = self.ssl_ctx if proto == "https" else None
+                base_url = f"{proto}://127.0.0.1:{port}"
+
+                user_status = None
+                quota_summary = None
+
+                # 1. ลองดึง RetrieveUserQuotaSummary (เป็นทางการและแม่นยำที่สุด)
                 try:
-                    ctx = self.ssl_ctx if proto == "https" else None
+                    summary_url = f"{base_url}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary"
+                    req = urllib.request.Request(summary_url, data=b"{}", headers=headers)
                     with urllib.request.urlopen(req, context=ctx, timeout=0.8) as resp:
                         if resp.status == 200:
-                            data = json.loads(resp.read().decode("utf-8"))
-                            return data.get("userStatus")
-                except Exception:
-                    continue
-        return None
-
-    def _parse_quota_data(self, info: QuotaInfo, user_status: dict):
-        info.email = user_status.get("email", "Unknown")
-        plan_info = user_status.get("planStatus", {}).get("planInfo", {})
-        info.plan = plan_info.get("planName", "Pro")
-
-        model_configs = user_status.get("cascadeModelConfigData", {}).get("clientModelConfigs", [])
-        now = datetime.datetime.now(datetime.timezone.utc)
-
-        gemini_fractions = []
-        reset_times = []
-
-        for m in model_configs:
-            label = m.get("label", "")
-            q_info = m.get("quotaInfo", {})
-            frac = q_info.get("remainingFraction")
-            r_time = q_info.get("resetTime")
-
-            if frac is not None:
-                if "gemini" in label.lower():
-                    gemini_fractions.append(frac)
-                if r_time:
-                    reset_times.append(r_time)
-
-        if gemini_fractions:
-            min_frac = min(gemini_fractions)
-            info.gemini_pct = int(min_frac * 100)
-            info.rolling_5h_pct = int(min_frac * 100)
-        else:
-            info.gemini_pct = 100
-            info.rolling_5h_pct = 100
-
-        if reset_times:
-            earliest_reset = None
-            for rt in reset_times:
-                try:
-                    dt = datetime.datetime.fromisoformat(rt.replace("Z", "+00:00"))
-                    if earliest_reset is None or dt < earliest_reset:
-                        earliest_reset = dt
+                            quota_summary = json.loads(resp.read().decode("utf-8"))
                 except Exception:
                     pass
 
-            if earliest_reset and earliest_reset > now:
-                diff = earliest_reset - now
+                # 2. ลองดึง GetUserStatus
+                try:
+                    status_url = f"{base_url}/exa.language_server_pb.LanguageServerService/GetUserStatus"
+                    req = urllib.request.Request(status_url, data=status_payload, headers=headers)
+                    with urllib.request.urlopen(req, context=ctx, timeout=0.8) as resp:
+                        if resp.status == 200:
+                            data = json.loads(resp.read().decode("utf-8"))
+                            user_status = data.get("userStatus")
+                except Exception:
+                    pass
+
+                if user_status or quota_summary:
+                    return user_status, quota_summary
+
+        return None, None
+
+    def _format_time_remaining(self, r_time_str: str, now: datetime.datetime, show_days: bool = True) -> str:
+        try:
+            dt = datetime.datetime.fromisoformat(r_time_str.replace("Z", "+00:00"))
+            if dt <= now:
+                return "Ready"
+            diff = dt - now
+            sec = int(diff.total_seconds())
+            days = sec // 86400
+            hours = (sec % 86400) // 3600
+            mins = (sec % 3600) // 60
+
+            if show_days and days > 0:
+                return f"{days}d {hours:02d}h"
+            elif hours > 0:
+                return f"{hours}h {mins:02d}m"
+            elif mins > 0:
+                return f"{mins}m"
+            else:
+                return "Ready"
+        except Exception:
+            return "--"
+
+    def _parse_quota_data(self, info: QuotaInfo, user_status: Optional[dict], quota_summary: Optional[dict]):
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        if user_status:
+            info.email = user_status.get("email", "Unknown")
+            plan_info = user_status.get("planStatus", {}).get("planInfo", {})
+            info.plan = plan_info.get("planName", "Pro")
+
+        summary_parsed = False
+        if quota_summary and "response" in quota_summary:
+            groups = quota_summary.get("response", {}).get("groups", [])
+            for g in groups:
+                d_name = g.get("displayName", "").lower()
+                buckets = g.get("buckets", [])
+
+                if "gemini" in d_name:
+                    for b in buckets:
+                        bid = b.get("bucketId", "")
+                        win = b.get("window", "")
+                        frac = b.get("remainingFraction")
+                        r_time = b.get("resetTime")
+
+                        if bid == "gemini-weekly" or win == "weekly":
+                            if frac is not None:
+                                info.gemini_pct = int(frac * 100)
+                            if r_time:
+                                info.weekly_str = self._format_time_remaining(r_time, now, show_days=True)
+                                summary_parsed = True
+
+                        elif bid == "gemini-5h" or win == "5h":
+                            if frac is not None:
+                                info.rolling_5h_pct = int(frac * 100)
+                            if r_time:
+                                info.reset_5h_str = self._format_time_remaining(r_time, now, show_days=False)
+
+                elif "claude" in d_name or "gpt" in d_name or "3p" in d_name:
+                    for b in buckets:
+                        bid = b.get("bucketId", "")
+                        win = b.get("window", "")
+                        frac = b.get("remainingFraction")
+                        if (bid == "3p-weekly" or win == "weekly") and frac is not None:
+                            info.third_party_weekly_pct = int(frac * 100)
+                        elif (bid == "3p-5h" or win == "5h") and frac is not None:
+                            info.third_party_5h_pct = int(frac * 100)
+
+        # Fallback หาก RetrieveUserQuotaSummary ไม่ให้ข้อมูล weekly
+        if not summary_parsed and user_status:
+            model_configs = user_status.get("cascadeModelConfigData", {}).get("clientModelConfigs", [])
+            gemini_fractions = []
+            short_reset_times = []
+            weekly_reset_times = []
+
+            for m in model_configs:
+                label = m.get("label", "").lower()
+                q_info = m.get("quotaInfo", {})
+                frac = q_info.get("remainingFraction")
+                r_time = q_info.get("resetTime")
+
+                if frac is not None:
+                    if "gemini" in label:
+                        gemini_fractions.append(frac)
+                    if r_time:
+                        try:
+                            dt = datetime.datetime.fromisoformat(r_time.replace("Z", "+00:00"))
+                            diff = (dt - now).total_seconds()
+                            if diff > 86400:
+                                weekly_reset_times.append(dt)
+                            elif diff > 0:
+                                short_reset_times.append(dt)
+                        except Exception:
+                            pass
+
+            if gemini_fractions:
+                min_frac = min(gemini_fractions)
+                info.gemini_pct = int(min_frac * 100)
+                info.rolling_5h_pct = int(min_frac * 100)
+
+            if short_reset_times:
+                earliest_5h = min(short_reset_times)
+                diff = earliest_5h - now
                 sec = int(diff.total_seconds())
                 h = sec // 3600
                 m = (sec % 3600) // 60
-                info.reset_5h_str = f"{h}h {m:02d}m"
+                info.reset_5h_str = f"{h}h {m:02d}m" if h > 0 or m > 0 else "Ready"
             else:
                 info.reset_5h_str = "Ready"
 
-        info.weekly_str = "6d 23h"
+            if weekly_reset_times:
+                earliest_weekly = min(weekly_reset_times)
+                diff = earliest_weekly - now
+                d = diff.days
+                h = (diff.seconds) // 3600
+                info.weekly_str = f"{d}d {h:02d}h" if d > 0 else f"{h}h"
+            else:
+                info.weekly_str = "Ready"
