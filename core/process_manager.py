@@ -45,14 +45,15 @@ class ProcessManager:
     def is_running(self, slot_id: int) -> bool:
         """ตรวจสอบว่า Antigravity IDE ประจำสล็อตนี้กำลังทำงานอยู่หรือไม่"""
         state = self.slots[slot_id]
-        if state.ide_pid and psutil.pid_exists(state.ide_pid):
-            try:
-                proc = psutil.Process(state.ide_pid)
-                running = proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
-                if running:
-                    return True
-            except Exception:
-                pass
+        if state.ide_pid:
+            if psutil.pid_exists(state.ide_pid):
+                try:
+                    proc = psutil.Process(state.ide_pid)
+                    if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
+                        return True
+                except Exception:
+                    pass
+            state.ide_pid = None
 
         # ตรวจสอบเพิ่มเติมว่ามีโปรเซส Antigravity IDE รันด้วย user-data-dir ของสล็อตนี้หรือไม่
         slot_tag = f"slot_{slot_id}"
@@ -67,6 +68,7 @@ class ProcessManager:
                 continue
 
         state.ide_hwnd = None
+        state.quota_info = QuotaInfo()
         return False
 
     def refresh_quota(self, slot_id: int) -> QuotaInfo:
@@ -178,7 +180,8 @@ class ProcessManager:
                         if "antigravity" in p.info['name'].lower():
                             cmd = " ".join(p.cmdline() or []).lower()
                             if slot_tag in cmd:
-                                hwnd = self.win_ctrl.find_window_by_pids({p.info['pid']})
+                                pids = self.win_ctrl.get_descendant_pids(p.info['pid'])
+                                hwnd = self.win_ctrl.find_window_by_pids(pids)
                                 if hwnd:
                                     state.ide_hwnd = hwnd
                                     state.ide_pid = p.info['pid']

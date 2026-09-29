@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, Signal
 
 from core.process_manager import ProcessManager
 from core.config_manager import ConfigManager
+from core.quota_service import QuotaInfo
 from .quota_pill import QuotaPillWidget
 
 
