@@ -3,6 +3,7 @@ import subprocess
 import time
 import threading
 from typing import Dict, List, Optional
+from pathlib import Path
 import psutil
 
 from .config_manager import ConfigManager
@@ -29,11 +30,10 @@ class ProcessManager:
         self.win_ctrl = win_ctrl
         self.layout_calc = layout_calc
         self.quota_svc = QuotaService()
-        self.logger = ConversationLogger(self.config_mgr.PROFILES_DIR if hasattr(self.config_mgr, 'PROFILES_DIR') else self.config_mgr.config_file_dir / "profiles" if hasattr(self.config_mgr, 'config_file_dir') else config_mgr.get_slot_paths(1)['ide_dir'])
 
-        from pathlib import Path
         base_dir = Path(__file__).resolve().parent.parent
-        self.logger = ConversationLogger(base_dir / "profiles")
+        self.profiles_dir = base_dir / "profiles"
+        self.logger = ConversationLogger(self.profiles_dir)
 
         self.slots: Dict[int, SlotState] = {i: SlotState(i) for i in range(1, 7)}
         self._lock = threading.Lock()
@@ -57,14 +57,16 @@ class ProcessManager:
         return False
 
     def refresh_quota(self, slot_id: int) -> QuotaInfo:
-        """ดึงข้อมูล Quota ล่าสุดของสล็อต"""
         state = self.slots[slot_id]
         q = self.quota_svc.fetch_slot_quota(slot_id, state.ide_pid)
         state.quota_info = q
         return q
 
     def launch_slot(self, slot_id: int):
-        """สั่งเปิด Antigravity IDE พร้อมแยก User Data Directory"""
+        """
+        สั่งเปิด Antigravity IDE แยกทั้ง User Data Directory และ Chat/Conversation Environment
+        100% Isolated: แยก Session, บัญชี Google, ประวัติการแชท (Conversations) และ Brain ออกจากกันเด็ดขาด
+        """
         if self.is_running(slot_id):
             return
 
@@ -74,16 +76,27 @@ class ProcessManager:
 
         ide_path = cfg.get("ide_path")
         if os.path.exists(ide_path):
+            # แยก USERPROFILE เพื่อให้โฟลเดอร์ .gemini/ และประวัติแชทเก็บแยกเด็ดขาดในแต่ละสล็อต
+            slot_dir = self.profiles_dir / f"slot_{slot_id}"
+            slot_home = slot_dir / "home"
+            slot_home.mkdir(parents=True, exist_ok=True)
+
+            custom_env = os.environ.copy()
+            custom_env["USERPROFILE"] = str(slot_home)
+            custom_env["HOME"] = str(slot_home)
+            custom_env["XDG_DATA_HOME"] = str(slot_home / ".local" / "share")
+            custom_env["XDG_CONFIG_HOME"] = str(slot_home / ".config")
+
             cmd = [
                 ide_path,
                 "--user-data-dir", paths["ide_dir"],
                 "-n"
             ]
-            proc = subprocess.Popen(cmd, close_fds=True)
+            proc = subprocess.Popen(cmd, env=custom_env, close_fds=True)
             state.ide_proc = proc
             state.ide_pid = proc.pid
-            self.logger.log_event(slot_id, "LAUNCH", f"Launched Antigravity IDE with PID {proc.pid}")
-            print(f"[Slot {slot_id}] Antigravity IDE launched with PID {proc.pid}")
+            self.logger.log_event(slot_id, "LAUNCH", f"Launched isolated IDE with PID {proc.pid}")
+            print(f"[Slot {slot_id}] Antigravity IDE launched with PID {proc.pid} (Isolated Home: {slot_home})")
 
             # Start thread to resolve HWND and initial Quota
             threading.Thread(target=self._resolve_slot_after_launch, args=(slot_id,), daemon=True).start()
@@ -118,7 +131,6 @@ class ProcessManager:
             self.stop_slot(s_id)
 
     def _resolve_slot_after_launch(self, slot_id: int):
-        """สแกนหา HWND ของหน้าต่าง และอัปเดต Quota เมื่อ IDE พร้อมทำงาน"""
         state = self.slots[slot_id]
         start_time = time.time()
 
@@ -134,9 +146,7 @@ class ProcessManager:
                     print(f"[Slot {slot_id}] Found IDE HWND: {hwnd}")
                     break
 
-        # Refresh quota info
         self.refresh_quota(slot_id)
-        # Re-tile
         self.apply_layout()
 
     def toggle_slot_visibility(self, slot_id: int) -> bool:
@@ -171,21 +181,17 @@ class ProcessManager:
             self.apply_layout()
             return True
 
-    def apply_layout(self, reserve_deck_width: int = 380):
-        """คำนวณและจัดตำแหน่งหน้าต่าง Antigravity IDE ทั้งหมดในพื้นที่ 3/4 จอ"""
+    def apply_layout(self, reserve_deck_width: int = 370):
         work_area = self.layout_calc.get_working_area()
 
-        # 1. ถ้ามีสล็อตที่กำลังขยายเต็มจอ
         if self.maximized_slot_id is not None:
             max_state = self.slots[self.maximized_slot_id]
-            # พื้นที่ 3/4 จอ (เว้น 1/4 ให้ Control Deck)
             ide_aw = max(600, work_area["width"] - reserve_deck_width)
             if max_state.ide_hwnd:
                 self.win_ctrl.show_window(max_state.ide_hwnd)
                 self.win_ctrl.set_window_bounds(max_state.ide_hwnd, work_area["x"], work_area["y"], ide_aw, work_area["height"])
             return
 
-        # 2. จัดการสล็อตปกติที่มองเห็นได้
         visible_slot_ids = [s_id for s_id, s in self.slots.items() if not s.is_hidden]
         slot_rects = self.layout_calc.compute_slot_rects(visible_slot_ids, work_area, reserve_deck_width=reserve_deck_width)
 
