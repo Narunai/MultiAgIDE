@@ -1,7 +1,7 @@
 import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QScrollArea, QMessageBox
+    QPushButton, QFrame, QScrollArea, QMessageBox, QApplication
 )
 from PySide6.QtCore import Qt, QTimer
 
@@ -17,8 +17,8 @@ from .slot_card import SlotCard
 class DashboardWindow(QMainWindow):
     """
     Compact 1/4 Screen Mission Control Deck
-    ออกแบบให้ใช้พื้นที่เพียง 1/4 ของหน้าจอ (แนบขอบจอ)
-    เพื่อปล่อยพื้นที่ 3/4 จอที่เหลือให้ Antigravity IDE แสดงผลได้อย่างเต็มที่
+    เปิดขึ้นมาอยู่ตรงกลางหรือชิดซ้าย ไม่หลุดขอบจอ
+    พร้อมปุ่มย้าย ซ้าย / กลาง / ขวา ในคลิกเดียว
     """
 
     def __init__(self):
@@ -31,17 +31,11 @@ class DashboardWindow(QMainWindow):
         self.win_ctrl = WindowController()
         self.proc_mgr = ProcessManager(self.config_mgr, self.win_ctrl, self.layout_calc)
 
-        # Style & Dimensions (1/4 ของความกว้างหน้าจอ)
+        # Apply Stylesheet
         self.setStyleSheet(DARK_THEME_QSS)
-        wa = self.layout_calc.get_working_area()
-        deck_width = 384
-        deck_height = wa["height"]
-        deck_x = wa["x"] + wa["width"] - deck_width
-        deck_y = wa["y"]
 
-        self.setGeometry(deck_x, deck_y, deck_width, deck_height)
-        self.setMinimumWidth(350)
-        self.setMaximumWidth(460)
+        # Set Safe Dimensions & Center on Screen
+        self.init_geometry()
 
         self.slot_cards = []
         self.init_ui()
@@ -51,9 +45,26 @@ class DashboardWindow(QMainWindow):
         self.refresh_timer.timeout.connect(self.poll_realtime_status)
         self.refresh_timer.start(2500)
 
+    def init_geometry(self):
+        """ตั้งค่าพิกัดให้แสดงผลตรงกลางจอหรือชิดซ้าย ไม่หลุดขอบจอ"""
+        screen = QApplication.primaryScreen()
+        if screen:
+            geom = screen.availableGeometry()
+            deck_w = 400
+            deck_h = min(760, geom.height() - 60)
+            # เริ่มต้นที่ฝั่งซ้ายของหน้าจอ (มีระยะห่าง 30px สบายตา ลากง่าย)
+            deck_x = geom.x() + 30
+            deck_y = geom.y() + 30
+            self.setGeometry(deck_x, deck_y, deck_w, deck_h)
+            self.setMinimumWidth(360)
+            self.setMaximumWidth(460)
+        else:
+            self.resize(400, 740)
+
     def init_ui(self):
         central_widget = QWidget()
         central_widget.setObjectName("CentralWidget")
+        central_widget.setStyleSheet("background-color: #0b0f17;")
         self.setCentralWidget(central_widget)
 
         root_layout = QVBoxLayout(central_widget)
@@ -75,10 +86,21 @@ class DashboardWindow(QMainWindow):
 
         top_row.addStretch()
 
-        self.btn_dock_right = QPushButton("📌 แนบขวา")
-        self.btn_dock_right.setToolTip("ย้าย Control Deck ไปแนบขอบขวาของจอ (1/4)")
-        self.btn_dock_right.clicked.connect(self.dock_to_right_edge)
-        top_row.addWidget(self.btn_dock_right)
+        # Position Quick Buttons (Left, Center, Right)
+        btn_left = QPushButton("⬅ ซ้าย")
+        btn_left.setToolTip("ย้าย Control Deck ไปชิดซ้าย")
+        btn_left.clicked.connect(self.dock_left)
+        top_row.addWidget(btn_left)
+
+        btn_center = QPushButton("⏺ กลาง")
+        btn_center.setToolTip("ย้าย Control Deck มาไว้ตรงกลางจอ")
+        btn_center.clicked.connect(self.dock_center)
+        top_row.addWidget(btn_center)
+
+        btn_right = QPushButton("➡ ขวา")
+        btn_right.setToolTip("ย้าย Control Deck ไปชิดขวา")
+        btn_right.clicked.connect(self.dock_right)
+        top_row.addWidget(btn_right)
 
         h_layout.addLayout(top_row)
 
@@ -93,7 +115,7 @@ class DashboardWindow(QMainWindow):
             btn = QPushButton(str(count))
             btn.setProperty("class", "PresetBtn")
             btn.setFixedWidth(28)
-            btn.setToolTip(f"จัดแบ่งหน้าจอ IDE {count} ส่วนในพื้นที่ 3/4 จอ")
+            btn.setToolTip(f"จัดแบ่งหน้าจอ IDE {count} ส่วน")
             btn.clicked.connect(lambda checked, c=count: self.apply_preset_count(c))
             preset_row.addWidget(btn)
 
@@ -126,9 +148,12 @@ class DashboardWindow(QMainWindow):
         # 2. Scroll Area containing all 6 Slots
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setStyleSheet("background-color: #0b0f17; border: none;")
+        scroll.viewport().setStyleSheet("background-color: #0b0f17;")
 
         cards_container = QWidget()
+        cards_container.setObjectName("CardsContainer")
+        cards_container.setStyleSheet("background-color: #0b0f17;")
         cards_layout = QVBoxLayout(cards_container)
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(8)
@@ -158,11 +183,25 @@ class DashboardWindow(QMainWindow):
 
         root_layout.addLayout(footer)
 
-    def dock_to_right_edge(self):
-        """แนบหน้าต่างเข้าขอบขวาของจอ (1/4 จอ)"""
-        wa = self.layout_calc.get_working_area()
-        deck_width = 384
-        self.setGeometry(wa["x"] + wa["width"] - deck_width, wa["y"], deck_width, wa["height"])
+    def dock_left(self):
+        screen = QApplication.primaryScreen()
+        if screen:
+            geom = screen.availableGeometry()
+            self.move(geom.x() + 20, geom.y() + 20)
+
+    def dock_center(self):
+        screen = QApplication.primaryScreen()
+        if screen:
+            geom = screen.availableGeometry()
+            x = geom.x() + (geom.width() - self.width()) // 2
+            y = geom.y() + (geom.height() - self.height()) // 2
+            self.move(x, y)
+
+    def dock_right(self):
+        screen = QApplication.primaryScreen()
+        if screen:
+            geom = screen.availableGeometry()
+            self.move(geom.x() + geom.width() - self.width() - 20, geom.y() + 20)
 
     def on_launch_all_clicked(self):
         self.proc_mgr.launch_all()
@@ -204,10 +243,9 @@ class DashboardWindow(QMainWindow):
         self.status_summary.setText(f"🟢 กำลังทำงาน: {running_count}/6 Slots")
 
     def poll_realtime_status(self):
-        """มอนิเตอร์สถานะแบบเรียลไทม์โดยไม่ต้องกดรีเฟรชเอง"""
         running_count = 0
         for card in self.slot_cards:
             card.update_status_display()
             if self.proc_mgr.is_running(card.slot_id):
                 running_count += 1
-        self.status_summary.setText(f"🟢 กำลังทำงาน: {running_count}/6 Slots | 1/4 Screen Control")
+        self.status_summary.setText(f"🟢 กำลังทำงาน: {running_count}/6 Slots | Control Deck")
