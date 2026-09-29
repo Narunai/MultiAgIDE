@@ -1,9 +1,38 @@
+import re
 import json
 import os
 import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 from .quota_service import QuotaInfo
+
+
+def parse_duration_to_seconds(dur_str: str) -> int:
+    """
+    แปลงข้อความเวลา เช่น '1h 44m', '2h', '45m', '6d 20h', '30s' ให้เป็นวินาที (seconds)
+    """
+    if not dur_str or dur_str in ("--", "Ready", "offline"):
+        return 0
+    total_sec = 0
+    dur = dur_str.strip().lower()
+
+    m_d = re.search(r'(\d+)\s*d', dur)
+    if m_d:
+        total_sec += int(m_d.group(1)) * 86400
+
+    m_h = re.search(r'(\d+)\s*h', dur)
+    if m_h:
+        total_sec += int(m_h.group(1)) * 3600
+
+    m_m = re.search(r'(\d+)\s*m', dur)
+    if m_m:
+        total_sec += int(m_m.group(1)) * 60
+
+    m_s = re.search(r'(\d+)\s*s', dur)
+    if m_s:
+        total_sec += int(m_s.group(1))
+
+    return total_sec
 
 
 class SlotHistoryRecord:
@@ -69,9 +98,30 @@ class SlotHistoryManager:
             try:
                 with open(self.history_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    has_changes = False
                     for sid_str, item in data.items():
                         sid = int(sid_str)
-                        self.records[sid] = SlotHistoryRecord.from_dict(item)
+                        rec = SlotHistoryRecord.from_dict(item)
+
+                        # ตรวจสอบและแปลง reset_5h_ts อัตโนมัติจาก reset_5h_str ตามเวลาจริง
+                        if rec.reset_5h_ts <= 0 and rec.reset_5h_str not in ("--", "Ready"):
+                            dur_5h = parse_duration_to_seconds(rec.reset_5h_str)
+                            if dur_5h > 0:
+                                base_t = rec.last_active_at if rec.last_active_at > 0 else time.time()
+                                rec.reset_5h_ts = base_t + dur_5h
+                                has_changes = True
+
+                        if rec.weekly_ts <= 0 and rec.weekly_str not in ("--", "Ready"):
+                            dur_w = parse_duration_to_seconds(rec.weekly_str)
+                            if dur_w > 0:
+                                base_t = rec.last_active_at if rec.last_active_at > 0 else time.time()
+                                rec.weekly_ts = base_t + dur_w
+                                has_changes = True
+
+                        self.records[sid] = rec
+
+                    if has_changes:
+                        self._save()
             except Exception as e:
                 print(f"[SlotHistory] Error loading history: {e}")
         else:

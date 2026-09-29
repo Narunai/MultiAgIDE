@@ -1,7 +1,9 @@
 import os
+import time
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QScrollArea, QMessageBox, QApplication
+    QPushButton, QFrame, QScrollArea, QMessageBox, QApplication,
+    QSystemTrayIcon
 )
 from PySide6.QtCore import Qt, QTimer
 
@@ -26,7 +28,8 @@ class DashboardWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MultiAgIDE Control Deck")
-        self.setWindowIcon(create_minimal_app_icon())
+        app_icon = create_minimal_app_icon()
+        self.setWindowIcon(app_icon)
         apply_dark_title_bar(self)
 
         # Core Engines
@@ -42,12 +45,19 @@ class DashboardWindow(QMainWindow):
         self.init_geometry()
 
         self.slot_cards = []
+        self.notified_cooldown_slots = set()
+
+        # System Tray for Windows toast notifications
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(app_icon)
+        self.tray_icon.show()
+
         self.init_ui()
 
-        # Real-time Auto-Refresh Timer (every 1.5 seconds)
+        # Real-time Auto-Refresh Timer (every 1 second for exact real-time clock countdown)
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.poll_realtime_status)
-        self.refresh_timer.start(1500)
+        self.refresh_timer.start(1000)
 
     def init_geometry(self):
         """
@@ -163,6 +173,34 @@ class DashboardWindow(QMainWindow):
 
         h_layout.addLayout(ctrl_row)
         root_layout.addWidget(header_card)
+
+        # Alert Banner: แสดงเตือนเมื่อโควตาพร้อมใช้งานอีกครั้ง ("อีเมลนี้พร้อมใช้งานอีกครั้ง")
+        self.alert_banner = QFrame()
+        self.alert_banner.setObjectName("AlertBanner")
+        self.alert_banner.setStyleSheet("""
+            QFrame#AlertBanner {
+                background-color: #064e3b;
+                border: 1px solid #10b981;
+                border-radius: 4px;
+                padding: 3px 6px;
+            }
+        """)
+        ab_layout = QHBoxLayout(self.alert_banner)
+        ab_layout.setContentsMargins(6, 3, 6, 3)
+        ab_layout.setSpacing(4)
+
+        self.alert_label = QLabel()
+        self.alert_label.setStyleSheet("color: #ecfdf5; font-size: 10px; font-weight: 700;")
+        ab_layout.addWidget(self.alert_label, 1)
+
+        btn_dismiss = QPushButton("X")
+        btn_dismiss.setFixedSize(14, 14)
+        btn_dismiss.setStyleSheet("background: transparent; color: #a7f3d0; font-size: 9px; font-weight: bold; border: none;")
+        btn_dismiss.clicked.connect(self.alert_banner.hide)
+        ab_layout.addWidget(btn_dismiss)
+
+        self.alert_banner.hide()
+        root_layout.addWidget(self.alert_banner)
 
         # 2. Slots Container (Scales up to 12 slots on screen, scrollable beyond)
         self.scroll = QScrollArea()
@@ -331,12 +369,40 @@ class DashboardWindow(QMainWindow):
                 running_count += 1
         self._update_status_summary(running_count)
 
+    def show_cooldown_alert(self, slot_id: int, email: str):
+        msg = f"อีเมล {email} พร้อมใช้งานอีกครั้ง"
+        self.alert_label.setText(f"[READY] {msg} (สล็อต #{slot_id})")
+        self.alert_banner.show()
+        QTimer.singleShot(15000, self.alert_banner.hide)
+
+        # Native Windows Toast Notification
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            try:
+                self.tray_icon.showMessage("MultiAgIDE", f"{msg} (Slot #{slot_id})", QSystemTrayIcon.Information, 8000)
+            except Exception:
+                pass
+
     def poll_realtime_status(self):
         running_count = 0
+        now = time.time()
         for card in self.slot_cards:
             card.update_status_display()
             if self.proc_mgr.is_running(card.slot_id):
                 running_count += 1
+
+            # ตรวจสอบสถานะ Cooldown Real-time เพื่อแจ้งเตือนเมื่อเหลือศูนย์
+            q, is_last_used, is_empty, is_cooldown_finished, is_generating = self.proc_mgr.get_slot_display_quota(card.slot_id)
+            if q.reset_5h_ts > 0:
+                if now < q.reset_5h_ts:
+                    # อยู่ระหว่างการนับถอยหลัง: รีเซ็ตสถานะแจ้งเตือน เพื่อให้สามารถแจ้งเตือนเมื่อนับถึงศูนย์
+                    self.notified_cooldown_slots.discard(card.slot_id)
+                elif now >= q.reset_5h_ts or is_cooldown_finished:
+                    # นับถอยหลังถึง 0 แล้ว! แจ้งเตือน 1 ครั้ง
+                    if card.slot_id not in self.notified_cooldown_slots:
+                        self.notified_cooldown_slots.add(card.slot_id)
+                        if q.email and q.email not in ("offline", "Unknown"):
+                            self.show_cooldown_alert(card.slot_id, q.email)
+
         self._update_status_summary(running_count)
 
     def showEvent(self, event):
