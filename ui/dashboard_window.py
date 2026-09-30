@@ -185,6 +185,7 @@ class DashboardWindow(QMainWindow):
         self.btn_launch_all = QPushButton("Run All")
         self.btn_launch_all.setProperty("class", "PrimaryBtn")
         self.btn_launch_all.setFixedHeight(18)
+        self.btn_launch_all.setToolTip("สตาร์ททุกสล็อตที่มี User เคยล็อกอินไว้ (ไม่ซ้ำบัญชีกัน)")
         self.btn_launch_all.clicked.connect(self.on_launch_all_clicked)
         ctrl_row.addWidget(self.btn_launch_all)
 

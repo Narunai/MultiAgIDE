@@ -271,7 +271,34 @@ class ProcessManager:
                     state.is_hidden = True
                     self.win_ctrl.hide_window(state.ide_hwnd)
 
-    def launch_slot(self, slot_id: int):
+    def get_slot_user_email(self, slot_id: int) -> Optional[str]:
+        """
+        ดึงอีเมลของผู้ใช้ที่ล็อกอินในสล็อตนี้ (หากยังไม่เคยล็อกอินหรือเป็นออฟไลน์ จะส่งกลับ None)
+        """
+        # 1. ตรวจสอบจาก QuotaInfo สดของโปรเซสที่กำลังรันอยู่
+        state = self.slots.get(slot_id)
+        if state and state.quota_info and state.quota_info.email:
+            e = state.quota_info.email.strip()
+            if e and e.lower() not in ("offline", "unknown", "none", "--"):
+                return e
+
+        # 2. ตรวจสอบจากประวัติการใช้งานใน history_mgr
+        rec = self.history_mgr.get_record(slot_id)
+        if rec and rec.email:
+            e = rec.email.strip()
+            if e and e.lower() not in ("offline", "unknown", "none", "--"):
+                return e
+
+        # 3. ตรวจสอบจากแคชของ quota_svc
+        q_cache = self.quota_svc.cache.get(slot_id)
+        if q_cache and q_cache.email:
+            e = q_cache.email.strip()
+            if e and e.lower() not in ("offline", "unknown", "none", "--"):
+                return e
+
+        return None
+
+    def launch_slot(self, slot_id: int, swap_d1: bool = True):
         """
         สั่งเปิด Antigravity IDE พร้อมผูก Workspace ประจำสล็อตอย่างถาวร
         ทำให้ประวัติการแชท (Chat History) ไม่สูญหายเมื่อปิดแล้วเปิดใหม่
@@ -280,8 +307,9 @@ class ProcessManager:
         if self.is_running(slot_id):
             return
 
-        # สลับปิด/ซ่อนหน้าต่างอื่นที่แชร์ Display 1 เดียวกัน
-        self._handle_display1_swap(slot_id)
+        # สลับปิด/ซ่อนหน้าต่างอื่นที่แชร์ Display 1 เดียวกัน (หากสั่งเปิดรายสล็อต)
+        if swap_d1:
+            self._handle_display1_swap(slot_id)
 
         cfg = self.config_mgr.config
         paths = self.config_mgr.get_slot_paths(slot_id)
@@ -309,17 +337,41 @@ class ProcessManager:
             threading.Thread(target=self._resolve_slot_after_launch, args=(slot_id,), daemon=True).start()
 
     def launch_all(self):
-        # เลือกรันสล็อตหลักสำหรับหน้าจอ (Display 1 ถึง 6)
-        # สำหรับกลุ่ม Display 1 (Slot 1 และ Slot 7+) ให้เลือกรันเพียง 1 สล็อตที่กำลังทำงานอยู่หรือ Slot 1
-        active_d1 = 1
-        for s_id in self.slots.keys():
-            if (s_id == 1 or s_id >= 7) and self.is_running(s_id):
-                active_d1 = s_id
-                break
+        """
+        สตาร์ททุกสล็อตที่มี user เคยล็อกอินไว้ และไม่ซ้ำกัน
+        - ไม่จำกัดแค่ 6 สล็อตอีกต่อไป สามารถเปิดสล็อต 7, 8, 9... ที่มี user ล็อกอินได้ทั้งหมด
+        - หากมีบัญชีเดียวกันล็อกอินซ้ำในหลายสล็อต ให้เลือกเปิดเฉพาะสล็อตแรกที่พบ
+        """
+        slots_cfg = self.config_mgr.config.get("slots", [])
+        sorted_slots = sorted(slots_cfg, key=lambda s: s["id"])
 
-        slots_to_run = [active_d1] + [s_id for s_id in range(2, 7) if s_id in self.slots]
+        seen_emails = set()
+        slots_to_run = []
+
+        for s in sorted_slots:
+            sid = s["id"]
+            email = self.get_slot_user_email(sid)
+            if not email:
+                continue  # ข้ามสล็อตที่ยังไม่มี user ล็อกอิน (offline)
+
+            norm_email = email.lower()
+            if norm_email in seen_emails:
+                print(f"[Run All] Slot #{sid} has duplicate user ({email}), skipping.")
+                continue  # ซ้ำกัน ให้เปิดแค่อันแรกที่พบ
+
+            seen_emails.add(norm_email)
+            slots_to_run.append(sid)
+
+        # กรณีพิเศษ: หากยังไม่มีสล็อตใดเคยล็อกอินเลย (เช่น ติดตั้งใหม่) ให้เปิดสล็อตแรก
+        if not slots_to_run and sorted_slots:
+            first_sid = sorted_slots[0]["id"]
+            slots_to_run = [first_sid]
+
+        print(f"[Run All] Launching unique user slots: {slots_to_run}")
+        self.logger.log_event(0, "RUN_ALL", f"Launching unique logged-in slots: {slots_to_run}")
+
         for s_id in slots_to_run:
-            self.launch_slot(s_id)
+            self.launch_slot(s_id, swap_d1=False)
             time.sleep(0.5)
 
     def stop_slot(self, slot_id: int):
