@@ -160,8 +160,10 @@ class SlotCard(QFrame):
         self.name_edit = QLineEdit(self.slot_name)
         self.name_edit.setPlaceholderText("Account name")
         self.name_edit.setStyleSheet("font-weight: 600; font-size: 11px;")
+        from PySide6.QtWidgets import QSizePolicy
+        self.name_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.name_edit.editingFinished.connect(self.on_name_changed)
-        top_row.addWidget(self.name_edit, 1)
+        top_row.addWidget(self.name_edit)
 
         self.status_badge = QLabel("STOPPED")
         self.status_badge.setObjectName("BadgeStopped")
@@ -186,6 +188,13 @@ class SlotCard(QFrame):
         self.btn_hide.clicked.connect(self.on_hide_clicked)
         top_row.addWidget(self.btn_hide)
 
+        self.btn_swap = QPushButton("Swap")
+        self.btn_swap.setFixedHeight(18)
+        self.btn_swap.setStyleSheet("background-color: #1e293b; color: #38bdf8; font-size: 9px; font-weight: bold; border-radius: 3px; padding: 0 4px;")
+        self.btn_swap.setToolTip(f"สลับบัญชีผู้ใช้ (Swap User) ของ Slot #{self.slot_id} กับสล็อตอื่น")
+        self.btn_swap.clicked.connect(self.on_swap_clicked)
+        top_row.addWidget(self.btn_swap)
+
         self.btn_log = QPushButton("Log")
         self.btn_log.setFixedHeight(18)
         self.btn_log.clicked.connect(self.on_log_clicked)
@@ -204,6 +213,7 @@ class SlotCard(QFrame):
 
         # Line 2: Minimal Flat Quota Strip
         self.quota_pill = QuotaPillWidget()
+        self.quota_pill.user_clicked.connect(self.on_swap_clicked)
         main_layout.addWidget(self.quota_pill)
 
     def on_name_changed(self):
@@ -248,6 +258,20 @@ class SlotCard(QFrame):
     def on_log_clicked(self):
         dialog = LogViewerDialog(self.slot_id, self.proc_mgr, self)
         dialog.exec()
+
+    def on_swap_clicked(self):
+        from .swap_dialog import SwapUserDialog
+        dialog = SwapUserDialog(self.slot_id, self.proc_mgr, self.config_mgr, self.window())
+        dialog.swap_completed.connect(self.on_swap_completed)
+        dialog.exec()
+
+    def on_swap_completed(self, src_id: int, tgt_id: int):
+        dashboard = self.window()
+        if hasattr(dashboard, "reload_all_slots"):
+            dashboard.reload_all_slots()
+        else:
+            self.update_status_display()
+            self.layout_changed.emit()
 
     def on_delete_clicked(self):
         reply = QMessageBox.question(

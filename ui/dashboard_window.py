@@ -68,7 +68,7 @@ class DashboardWindow(QMainWindow):
         และหากมีจำนวนสล็อตมากกว่า 12 สล็อต ตัว ScrollArea จะเปิดให้เลื่อนดูได้อย่างราบรื่น
         """
         screen = QApplication.primaryScreen()
-        deck_w = 360
+        deck_w = 396
         num_slots = len(self.config_mgr.config.get("slots", []))
         visible_target_count = min(max(num_slots, 6), 12)
         target_h = 100 + (visible_target_count * 67)
@@ -85,7 +85,7 @@ class DashboardWindow(QMainWindow):
             deck_h = min(target_h, 904)
             self.resize(deck_w, deck_h)
 
-        self.setFixedWidth(360)
+        self.setFixedWidth(396)
         self.setMinimumHeight(400)
 
     def init_ui(self):

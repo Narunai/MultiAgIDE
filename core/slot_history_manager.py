@@ -95,9 +95,10 @@ class SlotHistoryManager:
 
     def _load(self):
         if self.history_file.exists():
-            try:
-                with open(self.history_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+            for attempt in range(3):
+                try:
+                    with open(self.history_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
                     has_changes = False
                     for sid_str, item in data.items():
                         sid = int(sid_str)
@@ -122,8 +123,15 @@ class SlotHistoryManager:
 
                     if has_changes:
                         self._save()
-            except Exception as e:
-                print(f"[SlotHistory] Error loading history: {e}")
+                    break
+                except json.JSONDecodeError:
+                    if attempt < 2:
+                        time.sleep(0.05)
+                    else:
+                        print("[SlotHistory] Retried reading history but JSON was still empty/invalid")
+                except Exception as e:
+                    print(f"[SlotHistory] Error loading history: {e}")
+                    break
         else:
             # ค่าเริ่มต้นที่ตรวจพบจากเซสชันของระบบ (พรีโหลดเพื่อให้เห็นทันที)
             seed_data = {
@@ -149,8 +157,10 @@ class SlotHistoryManager:
         try:
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
             data = {str(sid): rec.to_dict() for sid, rec in self.records.items()}
-            with open(self.history_file, "w", encoding="utf-8") as f:
+            temp_file = self.history_file.with_suffix(".tmp")
+            with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+            os.replace(temp_file, self.history_file)
         except Exception as e:
             print(f"[SlotHistory] Error saving history: {e}")
 

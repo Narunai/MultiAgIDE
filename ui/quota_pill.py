@@ -1,6 +1,21 @@
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from core.quota_service import QuotaInfo
+
+
+class ClickableAccountLabel(QLabel):
+    clicked = Signal()
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
 
 
 class QuotaPillWidget(QFrame):
@@ -8,6 +23,8 @@ class QuotaPillWidget(QFrame):
     Minimal Flat Dark Quota Strip (No Icons)
     ความสูงคงที่ 30px สไตล์ Minimalist ตัวหนังสือคมชัด
     """
+    user_clicked = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("QuotaPill")
@@ -59,8 +76,19 @@ class QuotaPillWidget(QFrame):
 
         row2.addStretch()
 
-        self.lbl_account = QLabel("offline")
-        self.lbl_account.setStyleSheet("color: #52525b; font-size: 9px;")
+        self.lbl_account = ClickableAccountLabel("offline")
+        self.lbl_account.setStyleSheet("""
+            QLabel {
+                color: #71717a;
+                font-size: 9px;
+            }
+            QLabel:hover {
+                color: #38bdf8;
+                text-decoration: underline;
+            }
+        """)
+        self.lbl_account.setToolTip("คลิกเพื่อสลับบัญชีผู้ใช้ (Swap User) กับสล็อตอื่น")
+        self.lbl_account.clicked.connect(self.user_clicked.emit)
         row2.addWidget(self.lbl_account)
 
         main_layout.addLayout(row2)
