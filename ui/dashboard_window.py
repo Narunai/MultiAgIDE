@@ -48,6 +48,7 @@ class DashboardWindow(QMainWindow):
 
         self.slot_cards = []
         self.notified_cooldown_slots = set()
+        self.click_mode = "max"  # "max" or "tile"
 
         # System Tray for Windows toast notifications
         self.tray_icon = QSystemTrayIcon(self)
@@ -113,6 +114,26 @@ class DashboardWindow(QMainWindow):
         top_row.addWidget(app_title)
 
         top_row.addStretch()
+
+        mode_lbl = QLabel("Mode:")
+        mode_lbl.setStyleSheet("color: #71717a; font-size: 10px; font-weight: 600;")
+        top_row.addWidget(mode_lbl)
+
+        self.btn_mode_max = QPushButton("Max")
+        self.btn_mode_max.setFixedHeight(18)
+        self.btn_mode_max.setToolTip("Clicking slot calls it out in FULL MAX mode")
+        self.btn_mode_max.setStyleSheet("font-size: 9px; padding: 0 4px; background-color: #0284c7; color: white; font-weight: bold; border-radius: 3px;")
+        self.btn_mode_max.clicked.connect(self.set_mode_max)
+        top_row.addWidget(self.btn_mode_max)
+
+        self.btn_mode_tile = QPushButton("Grid")
+        self.btn_mode_tile.setFixedHeight(18)
+        self.btn_mode_tile.setToolTip("Clicking slot calls it out in SMALL GRID tile mode")
+        self.btn_mode_tile.setStyleSheet("font-size: 9px; padding: 0 4px; background-color: #27272a; color: #a1a1aa; border-radius: 3px;")
+        self.btn_mode_tile.clicked.connect(self.set_mode_tile)
+        top_row.addWidget(self.btn_mode_tile)
+
+        top_row.addSpacing(3)
 
         pos_label = QLabel("Pos:")
         pos_label.setStyleSheet("color: #71717a; font-size: 10px;")
@@ -265,6 +286,16 @@ class DashboardWindow(QMainWindow):
         footer.addWidget(btn_profiles)
 
         root_layout.addLayout(footer)
+
+    def set_mode_max(self):
+        self.click_mode = "max"
+        self.btn_mode_max.setStyleSheet("font-size: 9px; padding: 0 4px; background-color: #0284c7; color: white; font-weight: bold; border-radius: 3px;")
+        self.btn_mode_tile.setStyleSheet("font-size: 9px; padding: 0 4px; background-color: #27272a; color: #a1a1aa; border-radius: 3px;")
+
+    def set_mode_tile(self):
+        self.click_mode = "tile"
+        self.btn_mode_tile.setStyleSheet("font-size: 9px; padding: 0 4px; background-color: #0284c7; color: white; font-weight: bold; border-radius: 3px;")
+        self.btn_mode_max.setStyleSheet("font-size: 9px; padding: 0 4px; background-color: #27272a; color: #a1a1aa; border-radius: 3px;")
 
     def dock_left(self):
         screen = QApplication.primaryScreen()

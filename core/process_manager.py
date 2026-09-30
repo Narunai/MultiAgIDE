@@ -419,10 +419,15 @@ class ProcessManager:
         self.apply_layout()
         return not state.is_hidden
 
-    def bring_slot_to_front(self, slot_id: int) -> bool:
+    def bring_slot_to_front(self, slot_id: int, force_max: Optional[bool] = None) -> bool:
         """
-        เรียกหน้าต่างงานของสล็อตนั้นขึ้นมาด้านหน้าสุด (Unhide + Restore + Bring to Top)
+        เรียกหน้าต่างงานของสล็อตนั้นขึ้นมาด้านหน้าสุด (Unhide + Bring to Top)
         พร้อมสลับกลุ่ม Display 1 อัตโนมัติหากเป็นสล็อต 1 หรือสล็อต 7+
+        
+        force_max:
+        - True: สั่ง Maximize เต็มหน้าจอทันที
+        - False: สั่งโหมด Grid หน้าจอเล็ก (Tile Mode)
+        - None: รักษาโหมดเดิม (ถ้ากำลัง Max อยู่ ให้ Max สล็อตนี้, ถ้ากำลัง Grid ให้คง Grid)
         """
         self.ensure_slot(slot_id)
         if not self.is_running(slot_id):
@@ -430,7 +435,7 @@ class ProcessManager:
 
         state = self.slots[slot_id]
 
-        # 1. สลับกลุ่ม Display 1
+        # 1. จัดการสล็อตกลุ่ม Display 1 (สล็อต 1, 7+)
         self._handle_display1_swap(slot_id)
 
         # 2. ถ้ายกเลิกซ่อน (Unhide)
@@ -445,7 +450,28 @@ class ProcessManager:
                 pids = self.win_ctrl.get_descendant_pids(state.ide_pid)
                 state.ide_hwnd = self.win_ctrl.find_window_by_pids(pids)
 
-        # 4. แสดงและดึงหน้าต่างมาข้างหน้าสุด
+        # 4. จัดการเรื่องโหมด Max vs โหมด Grid เล็ก อย่างอิสระ
+        if force_max is True:
+            self.maximized_slot_id = slot_id
+            for s_id, s in self.slots.items():
+                if s_id != slot_id and s.ide_hwnd:
+                    self.win_ctrl.hide_window(s.ide_hwnd)
+        elif force_max is False:
+            if self.maximized_slot_id is not None:
+                self.maximized_slot_id = None
+                for s_id, s in self.slots.items():
+                    if not s.is_hidden and s.ide_hwnd:
+                        self.win_ctrl.show_window(s.ide_hwnd)
+        else:
+            # force_max is None:
+            # ถ้าอยู่ในโหมด Max หน้าจออยู่แล้ว ให้สลับสล็อต Max มาเป็นสล็อตนี้โดยไม่หลุดเป็นจอเล็ก!
+            if self.maximized_slot_id is not None:
+                self.maximized_slot_id = slot_id
+                for s_id, s in self.slots.items():
+                    if s_id != slot_id and s.ide_hwnd:
+                        self.win_ctrl.hide_window(s.ide_hwnd)
+
+        # 5. แสดงและดึงหน้าต่างมาข้างหน้าสุด
         if state.ide_hwnd:
             self.win_ctrl.show_window(state.ide_hwnd)
             self.win_ctrl.bring_to_front(state.ide_hwnd)

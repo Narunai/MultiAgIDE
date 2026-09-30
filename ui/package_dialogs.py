@@ -219,10 +219,17 @@ class ExportDialog(QDialog):
         self.dest_edit = QLineEdit(default_path)
         dest_row.addWidget(self.dest_edit, 1)
 
-        btn_browse = QPushButton("Browse...")
-        btn_browse.setFixedHeight(26)
-        btn_browse.clicked.connect(self.browse_output)
-        dest_row.addWidget(btn_browse)
+        btn_browse_folder = QPushButton("Folder...")
+        btn_browse_folder.setFixedHeight(26)
+        btn_browse_folder.setToolTip("เลือกโฟลเดอร์ปลายทางที่จะบันทึกไฟล์")
+        btn_browse_folder.clicked.connect(self.browse_folder)
+        dest_row.addWidget(btn_browse_folder)
+
+        btn_browse_file = QPushButton("File...")
+        btn_browse_file.setFixedHeight(26)
+        btn_browse_file.setToolTip("เลือกตำแหน่งและระบุชื่อไฟล์ .zip")
+        btn_browse_file.clicked.connect(self.browse_output)
+        dest_row.addWidget(btn_browse_file)
         dest_layout.addLayout(dest_row)
 
         layout.addWidget(dest_card)
@@ -302,6 +309,15 @@ class ExportDialog(QDialog):
         )
         if f:
             self.dest_edit.setText(f)
+
+    def browse_folder(self):
+        curr = self.dest_edit.text().strip()
+        start_dir = os.path.dirname(curr) if curr else os.path.join(os.path.expanduser("~"), "Desktop")
+        folder = QFileDialog.getExistingDirectory(self, "Select Destination Folder", start_dir)
+        if folder:
+            now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+            filename = f"MultiAgIDE_Package_{now_str}.zip"
+            self.dest_edit.setText(os.path.join(folder, filename))
 
     def start_export(self):
         if self.is_exporting:
@@ -511,20 +527,27 @@ class ImportDialog(QDialog):
         fc_layout.setContentsMargins(10, 8, 10, 8)
         fc_layout.setSpacing(4)
 
-        fc_title = QLabel("Select Package File (.zip / .magpkg):")
+        fc_title = QLabel("Select Package File or Folder:")
         fc_title.setStyleSheet("font-weight: 700; font-size: 11px; color: #a1a1aa;")
         fc_layout.addWidget(fc_title)
 
         fc_row = QHBoxLayout()
         self.file_edit = QLineEdit()
-        self.file_edit.setPlaceholderText("Path to package archive...")
+        self.file_edit.setPlaceholderText("Path to package archive (.zip / .magpkg) or folder...")
         self.file_edit.textChanged.connect(self.on_file_path_changed)
         fc_row.addWidget(self.file_edit, 1)
 
-        btn_browse = QPushButton("Browse...")
-        btn_browse.setFixedHeight(26)
-        btn_browse.clicked.connect(self.browse_package)
-        fc_row.addWidget(btn_browse)
+        btn_browse_folder = QPushButton("Folder...")
+        btn_browse_folder.setFixedHeight(26)
+        btn_browse_folder.setToolTip("เลือกโฟลเดอร์แพ็กเกจ/โปรเจกต์ที่ต้องการนำเข้า")
+        btn_browse_folder.clicked.connect(self.browse_folder)
+        fc_row.addWidget(btn_browse_folder)
+
+        btn_browse_file = QPushButton("File (.zip)...")
+        btn_browse_file.setFixedHeight(26)
+        btn_browse_file.setToolTip("เลือกไฟล์แพ็กเกจ .zip หรือ .magpkg")
+        btn_browse_file.clicked.connect(self.browse_package)
+        fc_row.addWidget(btn_browse_file)
         fc_layout.addLayout(fc_row)
 
         layout.addWidget(file_card)
@@ -627,9 +650,18 @@ class ImportDialog(QDialog):
         if f:
             self.file_edit.setText(f)
 
+    def browse_folder(self):
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select MultiAgIDE Package Folder",
+            os.path.join(os.path.expanduser("~"), "Desktop")
+        )
+        if folder:
+            self.file_edit.setText(folder)
+
     def on_file_path_changed(self, path: str):
         path = path.strip()
-        if os.path.exists(path) and (path.endswith(".zip") or path.endswith(".magpkg")):
+        if os.path.exists(path):
             try:
                 self.inspected_data = self.pkg_mgr.inspect_package(path)
                 self.display_inspection(self.inspected_data)

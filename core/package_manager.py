@@ -325,13 +325,55 @@ class PackageManager:
             "manifest": manifest
         }
 
-    def inspect_package(self, package_zip_path: str) -> dict:
-        """ตรวจสอบข้อมูลแพ็กเกจโดยไม่ต้องแตกไฟล์ทั้งหมดออกมาก่อน"""
-        zip_p = Path(package_zip_path).resolve()
-        if not zip_p.exists():
-            raise FileNotFoundError(f"Package file not found: {package_zip_path}")
+    def inspect_package(self, package_path: str) -> dict:
+        """ตรวจสอบข้อมูลแพ็กเกจ (รองรับทั้งไฟล์ .zip / .magpkg และโฟลเดอร์)"""
+        p = Path(package_path).resolve()
+        if not p.exists():
+            raise FileNotFoundError(f"Package not found: {package_path}")
 
-        with zipfile.ZipFile(zip_p, "r") as zf:
+        if p.is_dir():
+            manifest = None
+            manifest_file = p / "package_manifest.json"
+            if manifest_file.exists():
+                try:
+                    with open(manifest_file, "r", encoding="utf-8") as mf:
+                        manifest = json.load(mf)
+                except Exception:
+                    pass
+
+            if not manifest:
+                cfg_f = p / "config.json"
+                slots_data = []
+                if cfg_f.exists():
+                    try:
+                        with open(cfg_f, "r", encoding="utf-8") as f:
+                            c = json.load(f)
+                            slots_data = c.get("slots", [])
+                    except Exception:
+                        pass
+                manifest = {
+                    "source_base_dir": str(p),
+                    "created_at_iso": datetime.datetime.now().isoformat(),
+                    "slots": slots_data
+                }
+
+            all_files = [f for f in p.rglob("*") if f.is_file()]
+            total_size = sum(f.stat().st_size for f in all_files)
+
+            return {
+                "valid": True,
+                "is_directory": True,
+                "manifest": manifest,
+                "archive_path": str(p),
+                "archive_size_bytes": total_size,
+                "uncompressed_size_bytes": total_size,
+                "total_files": len(all_files),
+                "created_at_iso": manifest.get("created_at_iso", "Unknown"),
+                "source_base_dir": manifest.get("source_base_dir", str(p)),
+                "slots": manifest.get("slots", [])
+            }
+
+        with zipfile.ZipFile(p, "r") as zf:
             namelist = zf.namelist()
             manifest = None
             if "package_manifest.json" in namelist:
@@ -342,9 +384,10 @@ class PackageManager:
 
         return {
             "valid": manifest is not None,
+            "is_directory": False,
             "manifest": manifest or {},
-            "archive_path": str(zip_p),
-            "archive_size_bytes": zip_p.stat().st_size,
+            "archive_path": str(p),
+            "archive_size_bytes": p.stat().st_size,
             "uncompressed_size_bytes": uncompressed_size,
             "total_files": len(namelist),
             "created_at_iso": manifest.get("created_at_iso", "Unknown") if manifest else "Unknown",
@@ -354,19 +397,19 @@ class PackageManager:
 
     def import_package(
         self,
-        package_zip_path: str,
+        package_path: str,
         target_base_dir: Optional[Path] = None,
         selected_slot_ids: Optional[List[int]] = None,
         mode: str = "merge",  # "merge" หรือ "replace"
         progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> dict:
         """
-        นำเข้าแพ็กเกจ MultiAgIDE (.zip หรือ .magpkg)
+        นำเข้าแพ็กเกจ MultiAgIDE (รองรับทั้งไฟล์ .zip / .magpkg และโฟลเดอร์)
         พร้อมทำการ Auto-Path Remapping ให้เข้ากับ Path และการตั้งค่าบนเครื่องใหม่ทันที
         """
-        zip_p = Path(package_zip_path).resolve()
-        if not zip_p.exists():
-            raise FileNotFoundError(f"Package file not found: {package_zip_path}")
+        src_p = Path(package_path).resolve()
+        if not src_p.exists():
+            raise FileNotFoundError(f"Package not found: {package_path}")
 
         target_base = Path(target_base_dir or self.base_dir).resolve()
         target_profiles = target_base / "profiles"
@@ -375,7 +418,7 @@ class PackageManager:
 
         target_profiles.mkdir(parents=True, exist_ok=True)
 
-        inspection = self.inspect_package(package_zip_path)
+        inspection = self.inspect_package(package_path)
         manifest = inspection.get("manifest", {})
         old_source_base = manifest.get("source_base_dir", "")
 
@@ -386,20 +429,20 @@ class PackageManager:
 
         imported_slot_ids = set()
 
-        with zipfile.ZipFile(zip_p, "r") as zf:
-            infolist = zf.infolist()
-            total_items = len(infolist)
+        if src_p.is_dir():
+            # นำเข้าจากโฟลเดอร์โดยตรง
+            all_files = [f for f in src_p.rglob("*") if f.is_file()]
+            total_items = len(all_files)
             processed_items = 0
 
-            # 1. แตกไฟล์ทั้งหมด
-            for member in infolist:
-                arc_name = member.filename
-                if arc_name == "package_manifest.json":
+            for f in all_files:
+                rel_path = f.relative_to(src_p)
+                rel_str = str(rel_path).replace("\\", "/")
+                if rel_str == "package_manifest.json":
                     processed_items += 1
                     continue
 
-                # กรองเฉพาะสล็อตที่เลือก (หากระบุ)
-                parts = arc_name.split("/")
+                parts = rel_str.split("/")
                 if len(parts) >= 2 and parts[0] == "profiles" and parts[1].startswith("slot_"):
                     try:
                         sid = int(parts[1].split("_")[1])
@@ -410,16 +453,46 @@ class PackageManager:
                     except ValueError:
                         pass
 
-                # ถอดไฟล์ออกมายัง target_base
-                out_path = target_base / arc_name
+                out_path = target_base / rel_path
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-
-                with zf.open(member) as src_f, open(out_path, "wb") as dst_f:
-                    shutil.copyfileobj(src_f, dst_f)
+                shutil.copy2(f, out_path)
 
                 processed_items += 1
                 if progress_callback and (processed_items % 25 == 0 or processed_items == total_items):
-                    progress_callback(processed_items, total_items, arc_name)
+                    progress_callback(processed_items, total_items, rel_str)
+        else:
+            # นำเข้าจากไฟล์ Zip
+            with zipfile.ZipFile(src_p, "r") as zf:
+                infolist = zf.infolist()
+                total_items = len(infolist)
+                processed_items = 0
+
+                for member in infolist:
+                    arc_name = member.filename
+                    if arc_name == "package_manifest.json":
+                        processed_items += 1
+                        continue
+
+                    parts = arc_name.split("/")
+                    if len(parts) >= 2 and parts[0] == "profiles" and parts[1].startswith("slot_"):
+                        try:
+                            sid = int(parts[1].split("_")[1])
+                            if selected_slot_ids is not None and sid not in selected_slot_ids:
+                                processed_items += 1
+                                continue
+                            imported_slot_ids.add(sid)
+                        except ValueError:
+                            pass
+
+                    out_path = target_base / arc_name
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    with zf.open(member) as src_f, open(out_path, "wb") as dst_f:
+                        shutil.copyfileobj(src_f, dst_f)
+
+                    processed_items += 1
+                    if progress_callback and (processed_items % 25 == 0 or processed_items == total_items):
+                        progress_callback(processed_items, total_items, arc_name)
 
         # 2. ปรับแต่ง config.json ให้ตรวจพบ Antigravity IDE บนเครื่องนี้อัตโนมัติ
         if target_config.exists():

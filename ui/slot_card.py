@@ -98,20 +98,43 @@ class SlotCard(QFrame):
 
     def on_id_label_clicked(self, event):
         if event.button() == Qt.LeftButton:
-            self.on_focus_slot()
+            # กฎข้อ 1: ต้องกด Start ก่อนเท่านั้น ถ้าสล็อตปิดอยู่ การคลิกตัวเลขจะไม่เริ่มทำงาน
+            if not self.proc_mgr.is_running(self.slot_id):
+                return
+
+            # กฎข้อ 2: คลิกที่ตัวเลข #ID โดยตรง เป็นการสลับโหมด Max เต็มจอกับโหมด Grid เล็ก อย่างอิสระ
+            is_max = (self.proc_mgr.maximized_slot_id == self.slot_id)
+            if is_max:
+                self.proc_mgr.bring_slot_to_front(self.slot_id, force_max=False)
+            else:
+                self.proc_mgr.bring_slot_to_front(self.slot_id, force_max=True)
+
+            self.update_status_display()
+            self.layout_changed.emit()
 
     def on_focus_slot(self):
         """
-        เรียกหน้าต่างงานของสล็อตนั้นขึ้นมาด้านหน้าสุด (ตามคำขอของผู้ใช้: กดที่ตัวเลขหรือการ์ดเพื่อเรียกแท็บงานออกมา)
+        เรียกหน้าต่างงานของสล็อตนั้นขึ้นมาด้านหน้าสุด
+        กฎข้อ 1: เมื่อกด Start แล้ว ถึงจะสามารถคลิกเพื่อเรียกหน้าต่างขึ้นมาได้
+        หากยังไม่ได้กด Start (STOPPED) จะไม่เปิดขึ้นมาเด็ดขาด (ป้องกันการเปิดโดยไม่ตั้งใจ)
+        
+        กฎข้อ 2: ปรับโหมด Max vs โหมดหน้าจอเล็ก อย่างอิสระ ตามค่าที่เลือกใน Dashboard หรือรักษาสถานะ Max เดิม
         """
-        if self.proc_mgr.is_running(self.slot_id):
-            self.proc_mgr.bring_slot_to_front(self.slot_id)
-            self.update_status_display()
-            self.layout_changed.emit()
+        if not self.proc_mgr.is_running(self.slot_id):
+            return  # ห้าม Start อัตโนมัติ! ต้องกดปุ่ม Start เท่านั้น
+
+        dashboard = self.window()
+        click_mode = getattr(dashboard, "click_mode", "max")
+
+        if click_mode == "max":
+            self.proc_mgr.bring_slot_to_front(self.slot_id, force_max=True)
+        elif click_mode == "tile":
+            self.proc_mgr.bring_slot_to_front(self.slot_id, force_max=False)
         else:
-            self.proc_mgr.launch_slot(self.slot_id)
-            self.update_status_display(force_running=True)
-            self.layout_changed.emit()
+            self.proc_mgr.bring_slot_to_front(self.slot_id, force_max=None)
+
+        self.update_status_display()
+        self.layout_changed.emit()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
