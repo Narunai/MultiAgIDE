@@ -94,6 +94,22 @@ class QuotaPillWidget(QFrame):
         main_layout.addLayout(row2)
 
     def update_quota(self, q: QuotaInfo, is_running: bool = False, is_last_used: bool = False, is_empty: bool = False, is_cooldown_finished: bool = False, is_generating: bool = False):
+        state_key = (
+            q.email,
+            q.gemini_pct,
+            q.rolling_5h_pct,
+            q.weekly_str,
+            q.reset_5h_str,
+            is_running,
+            is_last_used,
+            is_empty,
+            is_cooldown_finished,
+            is_generating
+        )
+        if getattr(self, "_last_state", None) == state_key:
+            return
+        self._last_state = state_key
+
         email_short = q.email.split("@")[0] if ("@" in q.email and q.email != "offline") else q.email
 
         if is_running:

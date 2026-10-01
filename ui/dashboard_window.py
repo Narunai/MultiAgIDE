@@ -47,7 +47,8 @@ class DashboardWindow(QMainWindow):
         self.init_geometry()
 
         self.slot_cards = []
-        self.notified_cooldown_slots = set()
+        # Seed already-ready slots to prevent toast bombardment and UI delay on launch
+        self.notified_cooldown_slots = {s["id"] for s in self.config_mgr.config.get("slots", [])}
         self.click_mode = "max"  # "max" or "tile"
 
         # System Tray for Windows toast notifications
@@ -319,7 +320,7 @@ class DashboardWindow(QMainWindow):
             self.move(geom.x() + geom.width() - self.width() - 20, geom.y() + 20)
 
     def on_launch_all_clicked(self):
-        self.proc_mgr.launch_all()
+        self.proc_mgr.launch_all(on_done_callback=lambda: QTimer.singleShot(0, self.on_layout_or_status_changed))
         self.on_layout_or_status_changed()
 
     def on_snap_clicked(self):
@@ -431,9 +432,9 @@ class DashboardWindow(QMainWindow):
         self.proc_mgr.apply_layout(reserve_deck_width=self.width())
         self.on_layout_or_status_changed()
 
-    def _update_status_summary(self, running_count: int):
+    def _update_status_summary(self, running_sids: set):
         total_slots = len(self.slot_cards)
-        running_sids = {c.slot_id for c in self.slot_cards if self.proc_mgr.is_running(c.slot_id)}
+        running_count = len(running_sids)
         last_sid = self.proc_mgr.history_mgr.get_last_used_slot_id()
         best_sid = self.proc_mgr.history_mgr.get_best_available_slot_id(running_sids)
 
@@ -449,12 +450,13 @@ class DashboardWindow(QMainWindow):
         self.status_summary.setText(" | ".join(parts))
 
     def on_layout_or_status_changed(self):
-        running_count = 0
+        running_sids = set()
         for card in self.slot_cards:
-            card.update_status_display()
-            if self.proc_mgr.is_running(card.slot_id):
-                running_count += 1
-        self._update_status_summary(running_count)
+            res = card.update_status_display()
+            running = res[0] if isinstance(res, tuple) else self.proc_mgr.is_running(card.slot_id)
+            if running:
+                running_sids.add(card.slot_id)
+        self._update_status_summary(running_sids)
 
     def show_cooldown_alert(self, slot_id: int, email: str):
         msg = f"อีเมล {email} พร้อมใช้งานอีกครั้ง"
@@ -470,15 +472,20 @@ class DashboardWindow(QMainWindow):
                 pass
 
     def poll_realtime_status(self):
-        running_count = 0
+        running_sids = set()
         now = time.time()
         for card in self.slot_cards:
-            card.update_status_display()
-            if self.proc_mgr.is_running(card.slot_id):
-                running_count += 1
+            res = card.update_status_display()
+            if isinstance(res, tuple):
+                running, q, is_cooldown_finished = res
+            else:
+                running = self.proc_mgr.is_running(card.slot_id)
+                q, is_last_used, is_empty, is_cooldown_finished, _ = self.proc_mgr.get_slot_display_quota(card.slot_id)
+
+            if running:
+                running_sids.add(card.slot_id)
 
             # ตรวจสอบสถานะ Cooldown Real-time เพื่อแจ้งเตือนเมื่อเหลือศูนย์
-            q, is_last_used, is_empty, is_cooldown_finished, is_generating = self.proc_mgr.get_slot_display_quota(card.slot_id)
             if q.reset_5h_ts > 0:
                 if now < q.reset_5h_ts:
                     # อยู่ระหว่างการนับถอยหลัง: รีเซ็ตสถานะแจ้งเตือน เพื่อให้สามารถแจ้งเตือนเมื่อนับถึงศูนย์
@@ -490,7 +497,7 @@ class DashboardWindow(QMainWindow):
                         if q.email and q.email not in ("offline", "Unknown"):
                             self.show_cooldown_alert(card.slot_id, q.email)
 
-        self._update_status_summary(running_count)
+        self._update_status_summary(running_sids)
 
     def showEvent(self, event):
         super().showEvent(event)

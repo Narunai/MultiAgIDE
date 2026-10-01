@@ -297,17 +297,30 @@ class SlotCard(QFrame):
         q, is_last_used, is_empty, is_cooldown_finished, is_generating = self.proc_mgr.get_slot_display_quota(self.slot_id)
 
         if running:
-            self.status_badge.setText("RUNNING")
-            self.status_badge.setObjectName("BadgeRunning")
-            self.btn_toggle_run.setText("Stop")
-            self.btn_toggle_run.setProperty("class", "DangerBtn")
+            if getattr(self, "_last_rendered_running", None) is not True:
+                self.status_badge.setText("RUNNING")
+                self.status_badge.setObjectName("BadgeRunning")
+                self.btn_toggle_run.setText("Stop")
+                self.btn_toggle_run.setProperty("class", "DangerBtn")
+                self.status_badge.style().unpolish(self.status_badge)
+                self.status_badge.style().polish(self.status_badge)
+                self.btn_toggle_run.style().unpolish(self.btn_toggle_run)
+                self.btn_toggle_run.style().polish(self.btn_toggle_run)
+                self._last_rendered_running = True
+
             self.btn_toggle_run.setToolTip(f"คลิกเพื่อปิดสล็อต #{self.slot_id} ({q.email})")
             self.quota_pill.update_quota(q, is_running=True, is_last_used=is_last_used, is_empty=is_empty, is_cooldown_finished=False, is_generating=is_generating)
         else:
-            self.status_badge.setText("STOPPED")
-            self.status_badge.setObjectName("BadgeStopped")
-            self.btn_toggle_run.setText("Start")
-            self.btn_toggle_run.setProperty("class", "SuccessBtn")
+            if getattr(self, "_last_rendered_running", None) is not False:
+                self.status_badge.setText("STOPPED")
+                self.status_badge.setObjectName("BadgeStopped")
+                self.btn_toggle_run.setText("Start")
+                self.btn_toggle_run.setProperty("class", "SuccessBtn")
+                self.status_badge.style().unpolish(self.status_badge)
+                self.status_badge.style().polish(self.status_badge)
+                self.btn_toggle_run.style().unpolish(self.btn_toggle_run)
+                self.btn_toggle_run.style().polish(self.btn_toggle_run)
+                self._last_rendered_running = False
 
             if is_cooldown_finished:
                 self.btn_toggle_run.setToolTip(f"[READY] พร้อมใช้งาน: {q.email} (Cooldown เสร็จสิ้นแล้ว, กดเปิดเพื่อรีเฟรชเปอร์เซ็นต์)")
@@ -322,27 +335,26 @@ class SlotCard(QFrame):
 
         # ซิงค์สถานะปุ่ม Maximize/Restore ให้ตรงกับ ProcessManager (กรณีไปกด Max สล็อตอื่น)
         is_max = (self.proc_mgr.maximized_slot_id == self.slot_id)
-        if is_max:
-            if self.btn_maximize.text() != "Restore":
+        if is_max != getattr(self, "_last_rendered_max", None):
+            if is_max:
                 self.btn_maximize.setText("Restore")
                 self.btn_maximize.setStyleSheet("background-color: #d97706; color: white;")
-        else:
-            if self.btn_maximize.text() != "Max":
+            else:
                 self.btn_maximize.setText("Max")
                 self.btn_maximize.setStyleSheet("")
-                
+            self._last_rendered_max = is_max
+
         # ซิงค์สถานะปุ่ม Hide/Show
         state = self.proc_mgr.slots.get(self.slot_id)
         if state:
             is_visible = not state.is_hidden
-            if is_visible:
-                if self.btn_hide.text() != "Hide":
+            if is_visible != getattr(self, "_last_rendered_visible", None):
+                if is_visible:
                     self.btn_hide.setText("Hide")
                     self.btn_hide.setStyleSheet("")
-            else:
-                if self.btn_hide.text() != "Show":
+                else:
                     self.btn_hide.setText("Show")
                     self.btn_hide.setStyleSheet("background-color: #3f3f46; color: #71717a;")
+                self._last_rendered_visible = is_visible
 
-        self.status_badge.style().polish(self.status_badge)
-        self.btn_toggle_run.style().polish(self.btn_toggle_run)
+        return running, q, is_cooldown_finished
